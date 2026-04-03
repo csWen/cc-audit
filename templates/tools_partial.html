@@ -108,7 +108,7 @@
 <script>
 (function() {
     // Tool ranking bar chart (horizontal)
-    const rankCtx = document.getElementById('toolRankChart');
+    const rankCtx = freshCanvas('toolRankChart');
     if (rankCtx) {
         new Chart(rankCtx, {
             type: 'bar',
@@ -132,7 +132,7 @@
     }
 
     // Tool trend line chart (top 5 tools, stacked)
-    const trendCtx = document.getElementById('toolTrendChart');
+    const trendCtx = freshCanvas('toolTrendChart');
     if (trendCtx) {
         const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
         const datasets = {{ trend_datasets_json|safe }};

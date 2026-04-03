@@ -86,7 +86,7 @@
 <script>
 (function() {
     // Token trend
-    const trendCtx = document.getElementById('projectTrendChart');
+    const trendCtx = freshCanvas('projectTrendChart');
     if (trendCtx) {
         new Chart(trendCtx, {
             type: 'line',
@@ -145,7 +145,7 @@
     }
 
     // Tool bar chart
-    const barCtx = document.getElementById('toolBarChart');
+    const barCtx = freshCanvas('toolBarChart');
     if (barCtx) {
         new Chart(barCtx, {
             type: 'bar',

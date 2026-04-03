@@ -57,7 +57,7 @@
 <script>
 (function() {
     // Token trend line chart
-    const trendCtx = document.getElementById('tokenTrendChart');
+    const trendCtx = freshCanvas('tokenTrendChart');
     if (trendCtx) {
         new Chart(trendCtx, {
             type: 'line',
@@ -141,7 +141,7 @@
     }
 
     // Model pie chart
-    const pieCtx = document.getElementById('modelPieChart');
+    const pieCtx = freshCanvas('modelPieChart');
     if (pieCtx) {
         new Chart(pieCtx, {
             type: 'doughnut',
