@@ -56,11 +56,6 @@
 
 <script>
 (function() {
-    // Destroy existing charts before re-creating (HTMX re-render)
-    var c;
-    c = Chart.getChart('tokenTrendChart'); if (c) c.destroy();
-    c = Chart.getChart('modelPieChart'); if (c) c.destroy();
-
     // Token trend line chart
     const trendCtx = document.getElementById('tokenTrendChart');
     if (trendCtx) {

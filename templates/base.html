@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="/static/style.css">
     <script src="/static/htmx.min.js"></script>
     <script src="/static/chart.umd.min.js"></script>
+    <script>
+    // Destroy all Chart.js instances BEFORE HTMX swaps DOM,
+    // so charts are cleaned up while their canvas elements still exist.
+    document.addEventListener('htmx:beforeSwap', function() {
+        Object.values(Chart.instances).forEach(function(c) { c.destroy(); });
+    });
+    </script>
 </head>
 <body>
     <nav class="sidebar">
