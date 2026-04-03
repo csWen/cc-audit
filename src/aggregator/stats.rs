@@ -185,6 +185,12 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                 }
 
                 if let TranscriptEntry::Assistant(a) = entry {
+                    // Skip intermediate streaming chunks — only count the final
+                    // entry (with stop_reason set) to avoid double-counting.
+                    if a.message.stop_reason.is_none() {
+                        continue;
+                    }
+
                     proj_stats.message_count += 1;
                     stats.total_turns += 1;
 
@@ -471,6 +477,11 @@ pub fn aggregate_project(
             }
 
             if let TranscriptEntry::Assistant(a) = entry {
+                // Skip intermediate streaming chunks
+                if a.message.stop_reason.is_none() {
+                    continue;
+                }
+
                 let model = a.message.model.as_deref().unwrap_or("unknown");
 
                 if let Some(usage) = &a.message.usage {
