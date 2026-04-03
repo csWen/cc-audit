@@ -41,7 +41,7 @@
 <!-- Charts -->
 <div class="charts-row">
     <div class="chart-card">
-        <h3>Token Usage Trend (Daily)</h3>
+        <h3>{% if range == "today" %}Token Breakdown{% else %}Token Usage Trend (Daily){% endif %}</h3>
         <div class="chart-container">
             <canvas id="tokenTrendChart"></canvas>
         </div>
@@ -56,85 +56,72 @@
 
 <script>
 (function() {
-    // Token trend line chart
-    const trendCtx = freshCanvas('tokenTrendChart');
-    if (trendCtx) {
+    // Token chart — breakdown bar for single day, trend line for multi-day
+    var dailyLabels = {{ daily_labels_json|safe }};
+    var dailyInput = {{ daily_input_json|safe }};
+    var dailyOutput = {{ daily_output_json|safe }};
+    var dailyCacheCreate = {{ daily_cache_create_json|safe }};
+    var dailyCacheRead = {{ daily_cache_read_json|safe }};
+
+    function fmtTok(v) {
+        if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
+        if (v >= 1000) return (v/1000).toFixed(0) + 'K';
+        return v;
+    }
+
+    var trendCtx = freshCanvas('tokenTrendChart');
+    if (trendCtx && dailyLabels.length <= 1) {
+        // Single day: show token type breakdown as horizontal bar
+        var totals = [
+            dailyInput.reduce(function(a,b){return a+b},0),
+            dailyOutput.reduce(function(a,b){return a+b},0),
+            dailyCacheCreate.reduce(function(a,b){return a+b},0),
+            dailyCacheRead.reduce(function(a,b){return a+b},0),
+        ];
+        new Chart(trendCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Input', 'Output', 'Cache Create', 'Cache Read'],
+                datasets: [{
+                    data: totals,
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'],
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function(ctx) { return fmtTok(ctx.parsed.x); } } }
+                },
+                scales: {
+                    x: { beginAtZero: true, ticks: { callback: fmtTok } }
+                }
+            }
+        });
+    } else if (trendCtx) {
+        // Multi-day: trend line chart
         new Chart(trendCtx, {
             type: 'line',
             data: {
-                labels: {{ daily_labels_json|safe }},
+                labels: dailyLabels,
                 datasets: [
-                    {
-                        label: 'Input',
-                        data: {{ daily_input_json|safe }},
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59,130,246,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 2,
-                    },
-                    {
-                        label: 'Output',
-                        data: {{ daily_output_json|safe }},
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16,185,129,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 2,
-                    },
-                    {
-                        label: 'Cache Create',
-                        data: {{ daily_cache_create_json|safe }},
-                        borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245,158,11,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 2,
-                    },
-                    {
-                        label: 'Cache Read',
-                        data: {{ daily_cache_read_json|safe }},
-                        borderColor: '#8b5cf6',
-                        backgroundColor: 'rgba(139,92,246,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 2,
-                    },
+                    { label: 'Input', data: dailyInput, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Output', data: dailyOutput, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Cache Create', data: dailyCacheCreate, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Cache Read', data: dailyCacheRead, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.1)', fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                if (value >= 1000000) return (value/1000000).toFixed(1) + 'M';
-                                if (value >= 1000) return (value/1000).toFixed(0) + 'K';
-                                return value;
-                            }
-                        }
-                    }
-                },
+                scales: { y: { beginAtZero: true, ticks: { callback: fmtTok } } },
                 plugins: {
                     legend: { position: 'bottom' },
-                    tooltip: {
-                        callbacks: {
-                            label: function(ctx) {
-                                let v = ctx.parsed.y;
-                                let label = ctx.dataset.label || '';
-                                if (v >= 1000000) return label + ': ' + (v/1000000).toFixed(1) + 'M';
-                                if (v >= 1000) return label + ': ' + (v/1000).toFixed(0) + 'K';
-                                return label + ': ' + v;
-                            }
-                        }
-                    }
+                    tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + fmtTok(ctx.parsed.y); } } }
                 }
             }
         });
