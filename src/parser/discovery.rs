@@ -1,5 +1,7 @@
-use anyhow::Result;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+
+use anyhow::Result;
 
 use super::session_index::parse_session_index;
 
@@ -45,15 +47,8 @@ pub fn discover_projects(claude_dir: &Path) -> Result<Vec<ProjectDir>> {
             continue; // Skip projects with no transcript data
         }
 
-        // Try to get projectPath from sessions-index.json
-        let project_path = match parse_session_index(&path) {
-            Ok(Some(index)) => index
-                .entries
-                .first()
-                .and_then(|e| e.project_path.clone())
-                .unwrap_or_else(|| dir_name.clone()),
-            _ => dir_name.clone(),
-        };
+        // Try to get projectPath from sessions-index.json, then from JSONL cwd field
+        let project_path = resolve_project_path(&path, &dir_name, &jsonl_files);
 
         let display_name = make_display_name(&project_path);
 
@@ -68,6 +63,45 @@ pub fn discover_projects(claude_dir: &Path) -> Result<Vec<ProjectDir>> {
 
     projects.sort_by(|a, b| a.project_path.cmp(&b.project_path));
     Ok(projects)
+}
+
+/// Try to resolve the original project path using multiple strategies:
+/// 1. sessions-index.json's projectPath field
+/// 2. "cwd" field from the first assistant message in a JSONL file
+/// 3. Fall back to the encoded directory name
+fn resolve_project_path(project_dir: &Path, dir_name: &str, jsonl_files: &[PathBuf]) -> String {
+    // Strategy 1: sessions-index.json
+    if let Ok(Some(index)) = parse_session_index(project_dir) {
+        if let Some(path) = index.entries.first().and_then(|e| e.project_path.clone()) {
+            return path;
+        }
+    }
+
+    // Strategy 2: extract "cwd" from first JSONL file
+    if let Some(first_jsonl) = jsonl_files.first() {
+        if let Some(cwd) = extract_cwd_from_jsonl(first_jsonl) {
+            return cwd;
+        }
+    }
+
+    // Strategy 3: fall back to dir name
+    dir_name.to_string()
+}
+
+/// Read the first few lines of a JSONL file to find a "cwd" field.
+fn extract_cwd_from_jsonl(path: &Path) -> Option<String> {
+    let file = std::fs::File::open(path).ok()?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines().take(20) {
+        let line = line.ok()?;
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+            if let Some(cwd) = val.get("cwd").and_then(|v| v.as_str()) {
+                return Some(cwd.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Collect all top-level JSONL files in a project directory.
