@@ -107,9 +107,9 @@
 
 <script>
 (function() {
-    Chart.helpers.each(Chart.instances, function(instance) {
-        instance.destroy();
-    });
+    var c;
+    c = Chart.getChart('toolRankChart'); if (c) c.destroy();
+    c = Chart.getChart('toolTrendChart'); if (c) c.destroy();
 
     // Tool ranking bar chart (horizontal)
     const rankCtx = document.getElementById('toolRankChart');

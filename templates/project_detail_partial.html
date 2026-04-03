@@ -85,9 +85,9 @@
 
 <script>
 (function() {
-    Chart.helpers.each(Chart.instances, function(instance) {
-        instance.destroy();
-    });
+    var c;
+    c = Chart.getChart('projectTrendChart'); if (c) c.destroy();
+    c = Chart.getChart('toolBarChart'); if (c) c.destroy();
 
     // Token trend
     const trendCtx = document.getElementById('projectTrendChart');

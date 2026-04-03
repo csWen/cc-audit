@@ -56,10 +56,10 @@
 
 <script>
 (function() {
-    // Destroy existing charts if any (HTMX re-render)
-    Chart.helpers.each(Chart.instances, function(instance) {
-        instance.destroy();
-    });
+    // Destroy existing charts before re-creating (HTMX re-render)
+    var c;
+    c = Chart.getChart('tokenTrendChart'); if (c) c.destroy();
+    c = Chart.getChart('modelPieChart'); if (c) c.destroy();
 
     // Token trend line chart
     const trendCtx = document.getElementById('tokenTrendChart');
