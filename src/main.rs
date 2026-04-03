@@ -6,7 +6,8 @@ mod web;
 use clap::Parser;
 use cli::Cli;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    cli::run(cli)
+    cli::run(cli).await
 }

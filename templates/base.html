@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CC-Audit — {% block title %}Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/chart.umd.min.js"></script>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h1>CC-Audit</h1>
+            <div class="version">Claude Code Insights</div>
+        </div>
+        <ul class="nav-links">
+            <li>
+                <a href="/" class="{% if active_nav == "overview" %}active{% endif %}">
+                    <span class="nav-icon">&#9632;</span>
+                    <span>Overview</span>
+                </a>
+            </li>
+            <li>
+                <a href="/projects" class="{% if active_nav == "projects" %}active{% endif %}">
+                    <span class="nav-icon">&#9776;</span>
+                    <span>Projects</span>
+                </a>
+            </li>
+            <li>
+                <a href="/tools" class="{% if active_nav == "tools" %}active{% endif %}">
+                    <span class="nav-icon">&#9881;</span>
+                    <span>Tools</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

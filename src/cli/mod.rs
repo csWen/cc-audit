@@ -20,7 +20,11 @@ pub enum Command {
         range: RangeArg,
     },
     /// Start local web server for detailed dashboard
-    Serve,
+    Serve {
+        /// Port to listen on
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -44,13 +48,10 @@ impl From<RangeArg> for TimeRange {
     }
 }
 
-pub fn run(cli: Cli) -> anyhow::Result<()> {
+pub async fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Stats { range } => run_stats(range.into()),
-        Command::Serve => {
-            println!("cc-audit serve: coming soon...");
-            Ok(())
-        }
+        Command::Serve { port } => crate::web::serve(port).await,
     }
 }
 

@@ -1,0 +1,178 @@
+<div class="page-header">
+    <h2>Overview <span style="font-weight:400; font-size:14px; color:#64748b;">({{ time_range_label }})</span></h2>
+    <div class="time-range">
+        <button class="{% if range == "today" %}active{% endif %}"
+                hx-get="/api/overview?range=today" hx-target="#dashboard" hx-swap="innerHTML">Today</button>
+        <button class="{% if range == "7d" %}active{% endif %}"
+                hx-get="/api/overview?range=7d" hx-target="#dashboard" hx-swap="innerHTML">7 days</button>
+        <button class="{% if range == "30d" %}active{% endif %}"
+                hx-get="/api/overview?range=30d" hx-target="#dashboard" hx-swap="innerHTML">30 days</button>
+        <button class="{% if range == "all" %}active{% endif %}"
+                hx-get="/api/overview?range=all" hx-target="#dashboard" hx-swap="innerHTML">All time</button>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="cards-grid">
+    <div class="card">
+        <div class="card-label">Total Tokens</div>
+        <div class="card-value">{{ total_tokens }}</div>
+        <div class="card-sub">{{ total_sessions }} sessions &middot; {{ total_turns }} turns</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Input Tokens</div>
+        <div class="card-value">{{ input_tokens }}</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Output Tokens</div>
+        <div class="card-value">{{ output_tokens }}</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Cache (Create / Read)</div>
+        <div class="card-value">{{ cache_create_tokens }}</div>
+        <div class="card-sub">read: {{ cache_read_tokens }}</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Estimated Cost</div>
+        <div class="card-value">${{ total_cost }}</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>Token Usage Trend (Daily)</h3>
+        <div class="chart-container">
+            <canvas id="tokenTrendChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3>Model Usage</h3>
+        <div class="chart-container">
+            <canvas id="modelPieChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Destroy existing charts if any (HTMX re-render)
+    Chart.helpers.each(Chart.instances, function(instance) {
+        instance.destroy();
+    });
+
+    // Token trend line chart
+    const trendCtx = document.getElementById('tokenTrendChart');
+    if (trendCtx) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ daily_labels_json|safe }},
+                datasets: [
+                    {
+                        label: 'Input',
+                        data: {{ daily_input_json|safe }},
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    },
+                    {
+                        label: 'Output',
+                        data: {{ daily_output_json|safe }},
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16,185,129,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    },
+                    {
+                        label: 'Cache Create',
+                        data: {{ daily_cache_create_json|safe }},
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245,158,11,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    },
+                    {
+                        label: 'Cache Read',
+                        data: {{ daily_cache_read_json|safe }},
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139,92,246,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000000) return (value/1000000).toFixed(1) + 'M';
+                                if (value >= 1000) return (value/1000).toFixed(0) + 'K';
+                                return value;
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                let v = ctx.parsed.y;
+                                let label = ctx.dataset.label || '';
+                                if (v >= 1000000) return label + ': ' + (v/1000000).toFixed(1) + 'M';
+                                if (v >= 1000) return label + ': ' + (v/1000).toFixed(0) + 'K';
+                                return label + ': ' + v;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Model pie chart
+    const pieCtx = document.getElementById('modelPieChart');
+    if (pieCtx) {
+        new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ model_labels_json|safe }},
+                datasets: [{
+                    data: {{ model_costs_json|safe }},
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.label + ': $' + ctx.parsed.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+})();
+</script>

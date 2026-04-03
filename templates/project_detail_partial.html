@@ -1,0 +1,175 @@
+<div class="page-header">
+    <div>
+        <a href="/projects?range={{ range }}" style="font-size:13px; color:#64748b; text-decoration:none;">&larr; Back to Projects</a>
+        <h2 style="margin-top:4px;">{{ display_name }}
+            <span style="font-weight:400; font-size:14px; color:#64748b;">({{ time_range_label }})</span>
+        </h2>
+    </div>
+    <div class="time-range">
+        <button class="{% if range == "today" %}active{% endif %}"
+                hx-get="/api/project-detail/{{ dir_name }}?range=today" hx-target="#project-detail" hx-swap="innerHTML">Today</button>
+        <button class="{% if range == "7d" %}active{% endif %}"
+                hx-get="/api/project-detail/{{ dir_name }}?range=7d" hx-target="#project-detail" hx-swap="innerHTML">7 days</button>
+        <button class="{% if range == "30d" %}active{% endif %}"
+                hx-get="/api/project-detail/{{ dir_name }}?range=30d" hx-target="#project-detail" hx-swap="innerHTML">30 days</button>
+        <button class="{% if range == "all" %}active{% endif %}"
+                hx-get="/api/project-detail/{{ dir_name }}?range=all" hx-target="#project-detail" hx-swap="innerHTML">All time</button>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="cards-grid">
+    <div class="card">
+        <div class="card-label">Total Tokens</div>
+        <div class="card-value">{{ total_tokens }}</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Estimated Cost</div>
+        <div class="card-value">${{ total_cost }}</div>
+    </div>
+    <div class="card">
+        <div class="card-label">Sessions</div>
+        <div class="card-value">{{ session_count }}</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>Token Usage Trend (Daily)</h3>
+        <div class="chart-container">
+            <canvas id="projectTrendChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3>Tool Distribution</h3>
+        <div class="chart-container">
+            <canvas id="toolBarChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Sessions Table -->
+<div class="card" style="overflow-x:auto; margin-top:16px;">
+    <h3 style="font-size:14px; font-weight:600; color:#64748b; margin-bottom:12px;">Sessions</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Slug</th>
+                <th style="text-align:right">Messages</th>
+                <th style="text-align:right">Tokens</th>
+                <th style="text-align:right">Cost</th>
+                <th>First Prompt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sessions %}
+            <tr>
+                <td style="white-space:nowrap">{{ s.time }}</td>
+                <td><code style="font-size:12px;">{{ s.slug }}</code></td>
+                <td style="text-align:right">{{ s.message_count }}</td>
+                <td style="text-align:right">{{ s.total_tokens }}</td>
+                <td style="text-align:right">${{ s.cost }}</td>
+                <td class="prompt-preview">{{ s.first_prompt }}</td>
+            </tr>
+            {% endfor %}
+            {% if sessions.is_empty() %}
+            <tr>
+                <td colspan="6" style="text-align:center; color:#64748b; padding:40px;">No sessions found.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+(function() {
+    Chart.helpers.each(Chart.instances, function(instance) {
+        instance.destroy();
+    });
+
+    // Token trend
+    const trendCtx = document.getElementById('projectTrendChart');
+    if (trendCtx) {
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ daily_labels_json|safe }},
+                datasets: [
+                    {
+                        label: 'Input',
+                        data: {{ daily_input_json|safe }},
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,0.1)',
+                        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2,
+                    },
+                    {
+                        label: 'Output',
+                        data: {{ daily_output_json|safe }},
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16,185,129,0.1)',
+                        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2,
+                    },
+                    {
+                        label: 'Cache Create',
+                        data: {{ daily_cache_create_json|safe }},
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245,158,11,0.1)',
+                        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2,
+                    },
+                    {
+                        label: 'Cache Read',
+                        data: {{ daily_cache_read_json|safe }},
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139,92,246,0.1)',
+                        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2,
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 1000000) return (value/1000000).toFixed(1) + 'M';
+                                if (value >= 1000) return (value/1000).toFixed(0) + 'K';
+                                return value;
+                            }
+                        }
+                    }
+                },
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+
+    // Tool bar chart
+    const barCtx = document.getElementById('toolBarChart');
+    if (barCtx) {
+        new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ tool_labels_json|safe }},
+                datasets: [{
+                    label: 'Calls',
+                    data: {{ tool_counts_json|safe }},
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true } }
+            }
+        });
+    }
+})();
+</script>

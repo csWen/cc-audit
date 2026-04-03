@@ -6,7 +6,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 
 use crate::parser::discovery::{discover_projects, ProjectDir};
 use crate::parser::jsonl::parse_jsonl;
-use crate::parser::models::{ContentBlock, TranscriptEntry};
+use crate::parser::models::{ContentBlock, TranscriptEntry, UserEntry};
 
 use super::cost::estimate_cost;
 
@@ -77,6 +77,7 @@ pub struct ProjectStats {
     pub cost: f64,
     pub session_count: usize,
     pub message_count: usize,
+    pub last_active: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Default)]
@@ -161,10 +162,15 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                     }
                 }
 
-                // Track sessions
+                // Track sessions and last active time
                 if let Some(common) = entry.common() {
                     if let Some(sid) = &common.session_id {
                         sessions_seen.insert(sid.clone());
+                    }
+                    if let Some(ts) = common.timestamp {
+                        if proj_stats.last_active.is_none_or(|prev| ts > prev) {
+                            proj_stats.last_active = Some(ts);
+                        }
                     }
                 }
 
@@ -302,4 +308,211 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
     stats.daily.sort_by(|a, b| a.date.cmp(&b.date));
 
     Ok(stats)
+}
+
+// ── Per-project detail aggregation ──
+
+#[derive(Debug, Default)]
+pub struct SessionSummary {
+    pub session_id: String,
+    pub slug: String,
+    pub first_active: Option<DateTime<Utc>>,
+    pub message_count: usize,
+    pub tokens: TokenBreakdown,
+    pub cost: f64,
+    pub first_prompt: String,
+}
+
+#[derive(Debug, Default)]
+pub struct ProjectDetailStats {
+    pub dir_name: String,
+    pub display_name: String,
+    pub project_path: String,
+    pub time_range: String,
+    pub tokens: TokenBreakdown,
+    pub cost: f64,
+    pub session_count: usize,
+    pub daily: Vec<DailyTokenUsage>,
+    pub tools: Vec<ToolCallStats>,
+    pub sessions: Vec<SessionSummary>,
+}
+
+/// Aggregate detailed stats for a single project identified by dir_name.
+pub fn aggregate_project(
+    claude_dir: &Path,
+    dir_name: &str,
+    time_range: TimeRange,
+) -> Result<Option<ProjectDetailStats>> {
+    let projects = discover_projects(claude_dir)?;
+    let project = match projects.into_iter().find(|p| p.dir_name == dir_name) {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+
+    let cutoff = time_range.cutoff();
+
+    let mut detail = ProjectDetailStats {
+        dir_name: project.dir_name.clone(),
+        display_name: project.display_name.clone(),
+        project_path: project.project_path.clone(),
+        time_range: time_range.label().to_string(),
+        ..Default::default()
+    };
+
+    let mut tool_map: HashMap<String, usize> = HashMap::new();
+    let mut daily_map: HashMap<NaiveDate, (TokenBreakdown, f64)> = HashMap::new();
+    let mut session_map: HashMap<String, SessionSummary> = HashMap::new();
+
+    for jsonl_file in &project.jsonl_files {
+        let parse_result = parse_jsonl(jsonl_file)?;
+
+        for entry in &parse_result.entries {
+            // Time filter
+            if let Some(cutoff) = cutoff {
+                if let Some(common) = entry.common() {
+                    if let Some(ts) = common.timestamp {
+                        if ts < cutoff {
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // Track session and extract slug
+            if let Some(common) = entry.common() {
+                if let Some(sid) = &common.session_id {
+                    let sess = session_map.entry(sid.clone()).or_insert_with(|| {
+                        SessionSummary {
+                            session_id: sid.clone(),
+                            slug: common.slug.clone().unwrap_or_default(),
+                            first_active: common.timestamp,
+                            ..Default::default()
+                        }
+                    });
+                    // Update slug if we didn't have one
+                    if sess.slug.is_empty() {
+                        if let Some(s) = &common.slug {
+                            sess.slug = s.clone();
+                        }
+                    }
+                    // Track earliest timestamp
+                    if let Some(ts) = common.timestamp {
+                        if sess.first_active.is_none_or(|prev| ts < prev) {
+                            sess.first_active = Some(ts);
+                        }
+                    }
+                }
+            }
+
+            // Extract first user prompt per session
+            if let TranscriptEntry::User(user) = entry {
+                if user.prompt_id.is_some() {
+                    if let Some(common) = entry.common() {
+                        if let Some(sid) = &common.session_id {
+                            if let Some(sess) = session_map.get_mut(sid) {
+                                if sess.first_prompt.is_empty() {
+                                    sess.first_prompt = extract_user_text(user);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let TranscriptEntry::Assistant(a) = entry {
+                let model = a.message.model.as_deref().unwrap_or("unknown");
+
+                if let Some(usage) = &a.message.usage {
+                    let cost = estimate_cost(
+                        model,
+                        usage.input_tokens,
+                        usage.output_tokens,
+                        usage.cache_creation_input_tokens,
+                        usage.cache_read_input_tokens,
+                    );
+
+                    detail.tokens.input += usage.input_tokens;
+                    detail.tokens.output += usage.output_tokens;
+                    detail.tokens.cache_create += usage.cache_creation_input_tokens;
+                    detail.tokens.cache_read += usage.cache_read_input_tokens;
+                    detail.cost += cost;
+
+                    // Per-session tokens
+                    if let Some(common) = entry.common() {
+                        if let Some(sid) = &common.session_id {
+                            if let Some(sess) = session_map.get_mut(sid) {
+                                sess.message_count += 1;
+                                sess.tokens.input += usage.input_tokens;
+                                sess.tokens.output += usage.output_tokens;
+                                sess.tokens.cache_create += usage.cache_creation_input_tokens;
+                                sess.tokens.cache_read += usage.cache_read_input_tokens;
+                                sess.cost += cost;
+                            }
+                        }
+
+                        // Daily breakdown
+                        if let Some(ts) = common.timestamp {
+                            let date = ts.date_naive();
+                            let d = daily_map.entry(date).or_default();
+                            d.0.input += usage.input_tokens;
+                            d.0.output += usage.output_tokens;
+                            d.0.cache_create += usage.cache_creation_input_tokens;
+                            d.0.cache_read += usage.cache_read_input_tokens;
+                            d.1 += cost;
+                        }
+                    }
+                }
+
+                // Tool extraction
+                for block in &a.message.content {
+                    if let ContentBlock::ToolUse { name, .. } = block {
+                        *tool_map.entry(name.clone()).or_default() += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // Convert and sort
+    detail.session_count = session_map.len();
+
+    detail.sessions = session_map.into_values().collect();
+    detail
+        .sessions
+        .sort_by(|a, b| b.first_active.cmp(&a.first_active));
+
+    detail.tools = tool_map
+        .into_iter()
+        .map(|(name, count)| ToolCallStats { name, count })
+        .collect();
+    detail.tools.sort_by(|a, b| b.count.cmp(&a.count));
+
+    detail.daily = daily_map
+        .into_iter()
+        .map(|(date, (tokens, cost))| DailyTokenUsage { date, tokens, cost })
+        .collect();
+    detail.daily.sort_by(|a, b| a.date.cmp(&b.date));
+
+    Ok(Some(detail))
+}
+
+fn extract_user_text(user: &UserEntry) -> String {
+    let content = &user.message.content;
+    let text = if let Some(s) = content.as_str() {
+        s.to_string()
+    } else if let Some(arr) = content.as_array() {
+        arr.iter()
+            .find_map(|v| v.get("text").and_then(|t| t.as_str()))
+            .unwrap_or("")
+            .to_string()
+    } else {
+        String::new()
+    };
+    // Truncate to ~100 chars (respecting char boundaries)
+    let truncated: String = text.chars().take(100).collect();
+    if truncated.len() < text.len() {
+        format!("{truncated}...")
+    } else {
+        truncated
+    }
 }

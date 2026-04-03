@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Overview{% endblock %}
+
+{% block content %}
+<div id="dashboard"
+     hx-get="/api/overview?range={{ range }}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <div style="text-align:center; padding:60px; color:#64748b;">Loading...</div>
+</div>
+{% endblock %}

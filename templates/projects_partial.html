@@ -1,0 +1,46 @@
+<div class="page-header">
+    <h2>Projects <span style="font-weight:400; font-size:14px; color:#64748b;">({{ time_range_label }})</span></h2>
+    <div class="time-range">
+        <button class="{% if range == "today" %}active{% endif %}"
+                hx-get="/api/projects?range=today" hx-target="#projects-content" hx-swap="innerHTML">Today</button>
+        <button class="{% if range == "7d" %}active{% endif %}"
+                hx-get="/api/projects?range=7d" hx-target="#projects-content" hx-swap="innerHTML">7 days</button>
+        <button class="{% if range == "30d" %}active{% endif %}"
+                hx-get="/api/projects?range=30d" hx-target="#projects-content" hx-swap="innerHTML">30 days</button>
+        <button class="{% if range == "all" %}active{% endif %}"
+                hx-get="/api/projects?range=all" hx-target="#projects-content" hx-swap="innerHTML">All time</button>
+    </div>
+</div>
+
+<div class="card" style="overflow-x:auto;">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Project</th>
+                <th style="text-align:right">Sessions</th>
+                <th style="text-align:right">Total Tokens</th>
+                <th style="text-align:right">Cost</th>
+                <th style="text-align:right">Last Active</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in projects %}
+            <tr>
+                <td>
+                    <a href="/projects/{{ p.dir_name }}?range={{ range }}" class="project-link">{{ p.display_name }}</a>
+                    <div class="project-path">{{ p.project_path }}</div>
+                </td>
+                <td style="text-align:right">{{ p.session_count }}</td>
+                <td style="text-align:right">{{ p.total_tokens }}</td>
+                <td style="text-align:right">${{ p.cost }}</td>
+                <td style="text-align:right">{{ p.last_active }}</td>
+            </tr>
+            {% endfor %}
+            {% if projects.is_empty() %}
+            <tr>
+                <td colspan="5" style="text-align:center; color:#64748b; padding:40px;">No project data found for this time range.</td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
