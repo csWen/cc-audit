@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -7,8 +8,9 @@ use axum::http::{header, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+use chrono::NaiveDate;
 use rust_embed::Embed;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::aggregator::stats::{self, GlobalStats, ProjectDetailStats, TimeRange};
 
@@ -114,6 +116,53 @@ struct ProjectDetailPartial {
     daily_cache_read_json: String,
     tool_labels_json: String,
     tool_counts_json: String,
+}
+
+// ── Tools page templates ──
+
+#[derive(Template)]
+#[template(path = "tools.html")]
+struct ToolsPage {
+    active_nav: &'static str,
+    range: String,
+}
+
+struct ToolRow {
+    name: String,
+    count: usize,
+}
+
+struct SkillRow {
+    name: String,
+    count: usize,
+    last_used: String,
+}
+
+struct AgentRow {
+    agent_type: String,
+    count: usize,
+    last_used: String,
+}
+
+#[derive(Serialize)]
+struct TrendDataset {
+    label: String,
+    data: Vec<usize>,
+}
+
+#[derive(Template)]
+#[template(path = "tools_partial.html")]
+struct ToolsPartial {
+    range: String,
+    time_range_label: String,
+    tools: Vec<ToolRow>,
+    skills: Vec<SkillRow>,
+    agents: Vec<AgentRow>,
+    // Chart data
+    tool_labels_json: String,
+    tool_counts_json: String,
+    trend_labels_json: String,
+    trend_datasets_json: String,
 }
 
 // ── Query params ──
@@ -333,6 +382,109 @@ fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> Pro
     }
 }
 
+// ── Tools page handlers ──
+
+async fn tools_page(Query(q): Query<RangeQuery>) -> impl IntoResponse {
+    let tmpl = ToolsPage {
+        active_nav: "tools",
+        range: q.range,
+    };
+    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+}
+
+async fn tools_partial(
+    Query(q): Query<RangeQuery>,
+    state: axum::extract::State<Arc<AppState>>,
+) -> impl IntoResponse {
+    let time_range = parse_time_range(&q.range);
+    let global_stats = stats::aggregate(&state.claude_dir, time_range).unwrap_or_default();
+    let tmpl = build_tools_partial(&q.range, &global_stats);
+    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+}
+
+fn build_tools_partial(range: &str, stats: &GlobalStats) -> ToolsPartial {
+    let tools: Vec<ToolRow> = stats
+        .tools
+        .iter()
+        .map(|t| ToolRow {
+            name: t.name.clone(),
+            count: t.count,
+        })
+        .collect();
+
+    let skills: Vec<SkillRow> = stats
+        .skills
+        .iter()
+        .map(|s| SkillRow {
+            name: s.name.clone(),
+            count: s.count,
+            last_used: s
+                .last_used
+                .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
+                .unwrap_or_default(),
+        })
+        .collect();
+
+    let agents: Vec<AgentRow> = stats
+        .agents
+        .iter()
+        .map(|a| AgentRow {
+            agent_type: a.agent_type.clone(),
+            count: a.count,
+            last_used: a
+                .last_used
+                .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
+                .unwrap_or_default(),
+        })
+        .collect();
+
+    // Bar chart: top 15 tools
+    let top_tools: Vec<&stats::ToolCallStats> = stats.tools.iter().take(15).collect();
+    let tool_labels: Vec<String> = top_tools.iter().map(|t| t.name.clone()).collect();
+    let tool_counts: Vec<usize> = top_tools.iter().map(|t| t.count).collect();
+
+    // Trend chart: top 5 tools daily trend
+    let top5_names: Vec<String> = stats.tools.iter().take(5).map(|t| t.name.clone()).collect();
+    let trend_labels: Vec<String> = stats
+        .daily_tool_calls
+        .iter()
+        .map(|d| d.date.format("%m/%d").to_string())
+        .collect();
+
+    let trend_datasets: Vec<TrendDataset> = top5_names
+        .iter()
+        .map(|name| {
+            let data: Vec<usize> = stats
+                .daily_tool_calls
+                .iter()
+                .map(|d| {
+                    d.counts
+                        .iter()
+                        .find(|(n, _)| n == name)
+                        .map(|(_, c)| *c)
+                        .unwrap_or(0)
+                })
+                .collect();
+            TrendDataset {
+                label: name.clone(),
+                data,
+            }
+        })
+        .collect();
+
+    ToolsPartial {
+        range: range.to_string(),
+        time_range_label: stats.time_range.clone(),
+        tools,
+        skills,
+        agents,
+        tool_labels_json: serde_json::to_string(&tool_labels).unwrap_or_default(),
+        tool_counts_json: serde_json::to_string(&tool_counts).unwrap_or_default(),
+        trend_labels_json: serde_json::to_string(&trend_labels).unwrap_or_default(),
+        trend_datasets_json: serde_json::to_string(&trend_datasets).unwrap_or_default(),
+    }
+}
+
 // ── Static file handler ──
 
 async fn static_file(axum::extract::Path(path): axum::extract::Path<String>) -> Response {
@@ -385,6 +537,8 @@ pub async fn serve(port: u16) -> anyhow::Result<()> {
         .route("/api/projects", get(projects_partial))
         .route("/projects/{dir_name}", get(project_detail_page))
         .route("/api/project-detail/{dir_name}", get(project_detail_partial))
+        .route("/tools", get(tools_page))
+        .route("/api/tools", get(tools_partial))
         .route("/static/{*path}", get(static_file))
         .with_state(state);
 

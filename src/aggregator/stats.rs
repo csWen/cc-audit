@@ -90,12 +90,20 @@ pub struct ToolCallStats {
 pub struct SkillCallStats {
     pub name: String,
     pub count: usize,
+    pub last_used: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Default)]
 pub struct AgentCallStats {
     pub agent_type: String,
     pub count: usize,
+    pub last_used: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Default)]
+pub struct DailyToolCalls {
+    pub date: NaiveDate,
+    pub counts: Vec<(String, usize)>,
 }
 
 #[derive(Debug, Default)]
@@ -118,6 +126,7 @@ pub struct GlobalStats {
     pub skills: Vec<SkillCallStats>,
     pub agents: Vec<AgentCallStats>,
     pub daily: Vec<DailyTokenUsage>,
+    pub daily_tool_calls: Vec<DailyToolCalls>,
 }
 
 // ── Aggregation logic ──
@@ -133,9 +142,10 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
 
     let mut model_map: HashMap<String, (TokenBreakdown, usize, f64)> = HashMap::new();
     let mut tool_map: HashMap<String, usize> = HashMap::new();
-    let mut skill_map: HashMap<String, usize> = HashMap::new();
-    let mut agent_map: HashMap<String, usize> = HashMap::new();
+    let mut skill_map: HashMap<String, (usize, Option<DateTime<Utc>>)> = HashMap::new();
+    let mut agent_map: HashMap<String, (usize, Option<DateTime<Utc>>)> = HashMap::new();
     let mut daily_map: HashMap<NaiveDate, (TokenBreakdown, f64)> = HashMap::new();
+    let mut daily_tool_map: HashMap<NaiveDate, HashMap<String, usize>> = HashMap::new();
 
     for project in &projects {
         let mut proj_stats = ProjectStats {
@@ -232,14 +242,30 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                     }
 
                     // Tool/Skill/Agent extraction
+                    let entry_ts = entry.common().and_then(|c| c.timestamp);
+                    let entry_date = entry_ts.map(|t| t.date_naive());
+
                     for block in &a.message.content {
                         if let ContentBlock::ToolUse { name, input, .. } = block {
                             *tool_map.entry(name.clone()).or_default() += 1;
 
+                            // Daily tool call tracking
+                            if let Some(date) = entry_date {
+                                *daily_tool_map
+                                    .entry(date)
+                                    .or_default()
+                                    .entry(name.clone())
+                                    .or_default() += 1;
+                            }
+
                             if name == "Skill" {
                                 if let Some(input) = input {
                                     if let Some(skill_name) = input.get("skill").and_then(|v| v.as_str()) {
-                                        *skill_map.entry(skill_name.to_string()).or_default() += 1;
+                                        let s = skill_map.entry(skill_name.to_string()).or_default();
+                                        s.0 += 1;
+                                        if entry_ts.is_some() && s.1.is_none_or(|prev| entry_ts.unwrap() > prev) {
+                                            s.1 = entry_ts;
+                                        }
                                     }
                                 }
                             }
@@ -250,7 +276,11 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                                         .get("subagent_type")
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("general-purpose");
-                                    *agent_map.entry(agent_type.to_string()).or_default() += 1;
+                                    let a = agent_map.entry(agent_type.to_string()).or_default();
+                                    a.0 += 1;
+                                    if entry_ts.is_some() && a.1.is_none_or(|prev| entry_ts.unwrap() > prev) {
+                                        a.1 = entry_ts;
+                                    }
                                 }
                             }
                         }
@@ -291,13 +321,21 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
 
     stats.skills = skill_map
         .into_iter()
-        .map(|(name, count)| SkillCallStats { name, count })
+        .map(|(name, (count, last_used))| SkillCallStats {
+            name,
+            count,
+            last_used,
+        })
         .collect();
     stats.skills.sort_by(|a, b| b.count.cmp(&a.count));
 
     stats.agents = agent_map
         .into_iter()
-        .map(|(agent_type, count)| AgentCallStats { agent_type, count })
+        .map(|(agent_type, (count, last_used))| AgentCallStats {
+            agent_type,
+            count,
+            last_used,
+        })
         .collect();
     stats.agents.sort_by(|a, b| b.count.cmp(&a.count));
 
@@ -306,6 +344,19 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
         .map(|(date, (tokens, cost))| DailyTokenUsage { date, tokens, cost })
         .collect();
     stats.daily.sort_by(|a, b| a.date.cmp(&b.date));
+
+    // Daily tool call trend
+    let mut daily_tool_dates: Vec<NaiveDate> = daily_tool_map.keys().copied().collect();
+    daily_tool_dates.sort();
+    stats.daily_tool_calls = daily_tool_dates
+        .into_iter()
+        .map(|date| {
+            let counts_map = daily_tool_map.remove(&date).unwrap_or_default();
+            let mut counts: Vec<(String, usize)> = counts_map.into_iter().collect();
+            counts.sort_by(|a, b| b.1.cmp(&a.1));
+            DailyToolCalls { date, counts }
+        })
+        .collect();
 
     Ok(stats)
 }

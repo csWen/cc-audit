@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Tools & Skills{% endblock %}
+
+{% block content %}
+<div id="tools-content"
+     hx-get="/api/tools?range={{ range }}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <div style="text-align:center; padding:60px; color:#64748b;">Loading...</div>
+</div>
+{% endblock %}

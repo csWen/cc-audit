@@ -1,0 +1,169 @@
+<div class="page-header">
+    <h2>Tools & Skills <span style="font-weight:400; font-size:14px; color:#64748b;">({{ time_range_label }})</span></h2>
+    <div class="time-range">
+        <button class="{% if range == "today" %}active{% endif %}"
+                hx-get="/api/tools?range=today" hx-target="#tools-content" hx-swap="innerHTML">Today</button>
+        <button class="{% if range == "7d" %}active{% endif %}"
+                hx-get="/api/tools?range=7d" hx-target="#tools-content" hx-swap="innerHTML">7 days</button>
+        <button class="{% if range == "30d" %}active{% endif %}"
+                hx-get="/api/tools?range=30d" hx-target="#tools-content" hx-swap="innerHTML">30 days</button>
+        <button class="{% if range == "all" %}active{% endif %}"
+                hx-get="/api/tools?range=all" hx-target="#tools-content" hx-swap="innerHTML">All time</button>
+    </div>
+</div>
+
+<!-- Tool Ranking: Chart + Table -->
+<div class="charts-row">
+    <div class="chart-card">
+        <h3>Tool Call Ranking</h3>
+        <div class="chart-container" style="height:360px;">
+            <canvas id="toolRankChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <h3>Tool Call Trend (Daily)</h3>
+        <div class="chart-container" style="height:360px;">
+            <canvas id="toolTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Tool Table -->
+<div class="card" style="margin-bottom:24px; overflow-x:auto;">
+    <h3 style="font-size:14px; font-weight:600; color:#64748b; margin-bottom:12px;">All Tools</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Tool</th>
+                <th style="text-align:right">Calls</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tools %}
+            <tr>
+                <td style="color:#64748b;">{{ loop.index }}</td>
+                <td><code>{{ t.name }}</code></td>
+                <td style="text-align:right">{{ t.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Skills and Agents side by side -->
+<div class="charts-row">
+    <div class="card">
+        <h3 style="font-size:14px; font-weight:600; color:#64748b; margin-bottom:12px;">Skills</h3>
+        {% if skills.is_empty() %}
+        <p style="color:#64748b; font-size:13px;">No skill calls found.</p>
+        {% else %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Skill</th>
+                    <th style="text-align:right">Calls</th>
+                    <th style="text-align:right">Last Used</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in skills %}
+                <tr>
+                    <td><code>{{ s.name }}</code></td>
+                    <td style="text-align:right">{{ s.count }}</td>
+                    <td style="text-align:right">{{ s.last_used }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    <div class="card">
+        <h3 style="font-size:14px; font-weight:600; color:#64748b; margin-bottom:12px;">Agent Subagents</h3>
+        {% if agents.is_empty() %}
+        <p style="color:#64748b; font-size:13px;">No agent calls found.</p>
+        {% else %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th style="text-align:right">Calls</th>
+                    <th style="text-align:right">Last Used</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in agents %}
+                <tr>
+                    <td><code>{{ a.agent_type }}</code></td>
+                    <td style="text-align:right">{{ a.count }}</td>
+                    <td style="text-align:right">{{ a.last_used }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function() {
+    Chart.helpers.each(Chart.instances, function(instance) {
+        instance.destroy();
+    });
+
+    // Tool ranking bar chart (horizontal)
+    const rankCtx = document.getElementById('toolRankChart');
+    if (rankCtx) {
+        new Chart(rankCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ tool_labels_json|safe }},
+                datasets: [{
+                    label: 'Calls',
+                    data: {{ tool_counts_json|safe }},
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Tool trend line chart (top 5 tools, stacked)
+    const trendCtx = document.getElementById('toolTrendChart');
+    if (trendCtx) {
+        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+        const datasets = {{ trend_datasets_json|safe }};
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: {{ trend_labels_json|safe }},
+                datasets: datasets.map(function(ds, i) {
+                    return {
+                        label: ds.label,
+                        data: ds.data,
+                        borderColor: colors[i % colors.length],
+                        backgroundColor: 'transparent',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                    };
+                })
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: { y: { beginAtZero: true } },
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+})();
+</script>
