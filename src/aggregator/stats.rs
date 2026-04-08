@@ -535,10 +535,12 @@ pub fn aggregate_project(
         }
     }
 
-    // Convert and sort
-    detail.session_count = session_map.len();
-
-    detail.sessions = session_map.into_values().collect();
+    // Convert, filter out empty sessions (no messages and no tokens), and sort
+    detail.sessions = session_map
+        .into_values()
+        .filter(|s| s.message_count > 0 || s.tokens.total() > 0 || !s.first_prompt.is_empty())
+        .collect();
+    detail.session_count = detail.sessions.len();
     detail
         .sessions
         .sort_by(|a, b| b.first_active.cmp(&a.first_active));

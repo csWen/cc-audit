@@ -355,7 +355,13 @@ fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> Pro
                 .first_active
                 .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
                 .unwrap_or_default(),
-            slug: s.slug.clone(),
+            slug: if s.slug.is_empty() {
+                // Show truncated session_id as fallback when slug is unavailable
+                let id = &s.session_id;
+                if id.len() > 8 { format!("{}…", &id[..8]) } else { id.clone() }
+            } else {
+                s.slug.clone()
+            },
             message_count: s.message_count,
             total_tokens: fmt_tokens(s.tokens.total()),
             cost: format!("{:.2}", s.cost),
