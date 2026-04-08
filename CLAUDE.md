@@ -61,3 +61,7 @@ cargo clippy
 - **New aggregation metric**: Modify `aggregate()` in `src/aggregator/stats.rs`
 - **New dashboard page**: Create template in `templates/` (full + partial), add handler + route in `src/web/mod.rs`
 - **New model pricing**: Update `src/aggregator/cost.rs`
+
+## Security
+
+- **Never use real local paths** (e.g., `/Users/username/...`) in code, documentation, comments, or commit messages. Use generic placeholders like `~/.claude/projects/` or `/path/to/project` instead, to avoid leaking personal directory structures.

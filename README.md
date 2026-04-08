@@ -76,6 +76,10 @@ cc-audit is a single self-contained binary. It reads JSONL transcript files from
 
 Cost estimates are based on [Anthropic's published pricing](https://docs.anthropic.com/en/docs/about-claude/models) for each model tier (Opus, Sonnet, Haiku), including cache read/write multipliers.
 
+## Important Notes
+
+cc-audit depends on the undocumented JSONL session log format that Claude Code writes to `~/.claude/projects/`. This is not a public API — Anthropic may change the log schema, relocate the data, or remove session logging entirely in any future update. If that happens, cc-audit may produce incorrect results or stop working altogether until it is updated to match the new format.
+
 ## License
 
 MIT

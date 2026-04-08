@@ -8,9 +8,9 @@ use super::session_index::parse_session_index;
 /// Represents a discovered Claude Code project directory.
 #[derive(Debug, Clone)]
 pub struct ProjectDir {
-    /// The encoded directory name (e.g., "-Users-tristen-project-cc-audit")
+    /// The encoded directory name (e.g., "-Users-alice-project-my-app")
     pub dir_name: String,
-    /// The restored original project path (e.g., "/Users/tristen/project/cc-audit").
+    /// The restored original project path (e.g., "/Users/alice/project/my-app").
     /// Obtained from sessions-index.json when available, otherwise falls back to dir_name.
     pub project_path: String,
     /// A short display name (last two path components)
@@ -136,12 +136,12 @@ mod tests {
     #[test]
     fn test_display_name() {
         assert_eq!(
-            make_display_name("/Users/tristen/project/cc-audit"),
-            "project/cc-audit"
+            make_display_name("/Users/alice/project/my-app"),
+            "project/my-app"
         );
         assert_eq!(
-            make_display_name("/Users/tristen/.tda/repos/lex/tensor"),
-            "lex/tensor"
+            make_display_name("/Users/alice/work/org/service"),
+            "org/service"
         );
     }
 
