@@ -277,6 +277,262 @@ body {
     display: inline-block;
 }
 
+/* Session Detail */
+.session-header {
+    margin-bottom: 16px;
+}
+
+.back-link {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.back-link:hover {
+    color: var(--accent);
+}
+
+.session-meta-row {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.meta-sep {
+    color: var(--border);
+}
+
+.session-controls {
+    background: var(--card-bg);
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+}
+
+.toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+    accent-color: var(--accent);
+}
+
+/* Conversation */
+.conversation {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.msg {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+}
+
+.msg-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.msg-role {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.msg-role-user {
+    color: #1d4ed8;
+    background: #dbeafe;
+}
+
+.msg-role-assistant {
+    color: #059669;
+    background: #d1fae5;
+}
+
+.msg-model {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
+.msg-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+
+/* Message text content */
+.msg-text {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text-primary);
+}
+
+.msg-text p {
+    margin: 0 0 8px 0;
+}
+
+.msg-text p:last-child {
+    margin-bottom: 0;
+}
+
+.msg-text pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 12px 16px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 8px 0;
+}
+
+.msg-text code {
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.msg-text pre code {
+    background: none;
+    padding: 0;
+}
+
+.msg-text ul, .msg-text ol {
+    padding-left: 24px;
+    margin: 8px 0;
+}
+
+.msg-text li {
+    margin: 4px 0;
+}
+
+.msg-text table {
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.msg-text th, .msg-text td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.msg-text th {
+    background: #f8fafc;
+    font-weight: 600;
+}
+
+.msg-text blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 8px 0;
+    padding: 4px 16px;
+    color: var(--text-secondary);
+}
+
+.msg-text h1, .msg-text h2, .msg-text h3, .msg-text h4 {
+    margin: 12px 0 6px 0;
+}
+
+.msg-text h1 { font-size: 18px; }
+.msg-text h2 { font-size: 16px; }
+.msg-text h3 { font-size: 15px; }
+.msg-text h4 { font-size: 14px; }
+
+/* Tool calls */
+.tool-call, .tool-result {
+    margin: 6px 0;
+    font-size: 13px;
+}
+
+.tool-call-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-family: monospace;
+    color: var(--text-secondary);
+}
+
+.tool-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+}
+
+.tool-name {
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.tool-summary {
+    color: var(--text-secondary);
+}
+
+.tool-details {
+    margin: 4px 0 4px 14px;
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+}
+
+.tool-details summary {
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 2px 0;
+    user-select: none;
+}
+
+.tool-details summary:hover {
+    color: var(--accent);
+}
+
+.tool-pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 10px 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 6px 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* Toggle tool visibility */
+.hide-tools .tool-call,
+.hide-tools .tool-result {
+    display: none;
+}
+
+/* Clickable session rows */
+.session-row-link:hover {
+    background: #eef2ff !important;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .charts-row {

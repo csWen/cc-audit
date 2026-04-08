@@ -13,3 +13,4 @@ axum = "0.8"
 askama = "0.13"
 rust-embed = "8"
 anyhow = "1"
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }

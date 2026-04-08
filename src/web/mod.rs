@@ -12,6 +12,7 @@ use chrono::NaiveDate;
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 
+use crate::aggregator::session::{self, DisplayBlock, SessionDetail};
 use crate::aggregator::stats::{self, GlobalStats, ProjectDetailStats, TimeRange};
 
 #[derive(Embed)]
@@ -89,12 +90,37 @@ struct ProjectDetailPage {
 }
 
 struct SessionRow {
+    session_id: String,
     time: String,
     slug: String,
     message_count: usize,
     total_tokens: String,
     cost: String,
     first_prompt: String,
+}
+
+// ── Session detail templates ──
+
+struct SessionMessageRow {
+    role: String,
+    timestamp: String,
+    model: String,
+    blocks_html: String,
+}
+
+#[derive(Template)]
+#[template(path = "session_detail.html")]
+struct SessionDetailPage {
+    active_nav: &'static str,
+    meta_session_id: String,
+    meta_slug: String,
+    meta_project_display_name: String,
+    meta_project_dir_name: String,
+    meta_first_active: String,
+    meta_message_count: usize,
+    meta_total_tokens: String,
+    meta_cost: String,
+    messages: Vec<SessionMessageRow>,
 }
 
 #[derive(Template)]
@@ -351,6 +377,7 @@ fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> Pro
         .sessions
         .iter()
         .map(|s| SessionRow {
+            session_id: s.session_id.clone(),
             time: s
                 .first_active
                 .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
@@ -387,6 +414,117 @@ fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> Pro
         tool_counts_json: serde_json::to_string(&tool_counts).unwrap_or_default(),
     }
 }
+
+// ── Session detail handler ──
+
+#[derive(Deserialize)]
+struct SessionDetailPath {
+    session_id: String,
+}
+
+async fn session_detail_page_handler(
+    axum::extract::Path(path): axum::extract::Path<SessionDetailPath>,
+    state: axum::extract::State<Arc<AppState>>,
+) -> Response {
+    let detail = session::load_session(&state.claude_dir, &path.session_id)
+        .ok()
+        .flatten();
+
+    let Some(detail) = detail else {
+        return Html("<h2>Session not found</h2>".to_string()).into_response();
+    };
+
+    let tmpl = build_session_detail(&detail);
+    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}"))).into_response()
+}
+
+fn build_session_detail(detail: &SessionDetail) -> SessionDetailPage {
+    let messages: Vec<SessionMessageRow> = detail
+        .messages
+        .iter()
+        .map(|m| {
+            let blocks_html = render_blocks_html(&m.blocks);
+            SessionMessageRow {
+                role: m.role.clone(),
+                timestamp: m.timestamp.clone(),
+                model: m.model.clone(),
+                blocks_html,
+            }
+        })
+        .collect();
+
+    SessionDetailPage {
+        active_nav: "projects",
+        meta_session_id: detail.meta.session_id.clone(),
+        meta_slug: detail.meta.slug.clone(),
+        meta_project_display_name: detail.meta.project_display_name.clone(),
+        meta_project_dir_name: detail.meta.project_dir_name.clone(),
+        meta_first_active: detail.meta.first_active.clone(),
+        meta_message_count: detail.meta.message_count,
+        meta_total_tokens: detail.meta.total_tokens.clone(),
+        meta_cost: detail.meta.cost.clone(),
+        messages,
+    }
+}
+
+fn render_blocks_html(blocks: &[DisplayBlock]) -> String {
+    let mut html = String::new();
+    for block in blocks {
+        match block {
+            DisplayBlock::Text(rendered_html) => {
+                html.push_str("<div class=\"msg-text\">");
+                html.push_str(rendered_html);
+                html.push_str("</div>");
+            }
+            DisplayBlock::ToolUse {
+                name,
+                summary,
+                input_json,
+            } => {
+                html.push_str("<div class=\"tool-call\">");
+                html.push_str(&format!(
+                    "<div class=\"tool-call-header\"><span class=\"tool-dot\"></span><span class=\"tool-name\">{name}</span> <span class=\"tool-summary\">{}</span></div>",
+                    html_escape(summary)
+                ));
+                if !input_json.is_empty() {
+                    html.push_str("<details class=\"tool-details\"><summary>Input</summary><pre class=\"tool-pre\">");
+                    html.push_str(&html_escape(input_json));
+                    html.push_str("</pre></details>");
+                }
+                html.push_str("</div>");
+            }
+            DisplayBlock::ToolResult {
+                tool_name: _,
+                content,
+                line_count,
+                truncated,
+            } => {
+                html.push_str("<div class=\"tool-result\">");
+                let label = if *truncated {
+                    format!("Result ({line_count} lines, showing first {MAX_TOOL_RESULT_LINES})")
+                } else {
+                    format!("Result ({line_count} lines)")
+                };
+                html.push_str(&format!(
+                    "<details class=\"tool-details\"><summary>{label}</summary><pre class=\"tool-pre\">"
+                ));
+                html.push_str(&html_escape(content));
+                html.push_str("</pre></details>");
+                html.push_str("</div>");
+            }
+        }
+    }
+    html
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+const MAX_TOOL_RESULT_LINES: usize = 200;
 
 // ── Tools page handlers ──
 
@@ -543,6 +681,7 @@ pub async fn serve(port: u16) -> anyhow::Result<()> {
         .route("/api/projects", get(projects_partial))
         .route("/projects/{dir_name}", get(project_detail_page))
         .route("/api/project-detail/{dir_name}", get(project_detail_partial))
+        .route("/session/{session_id}", get(session_detail_page_handler))
         .route("/tools", get(tools_page))
         .route("/api/tools", get(tools_partial))
         .route("/static/{*path}", get(static_file))

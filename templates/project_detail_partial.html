@@ -65,7 +65,7 @@
         </thead>
         <tbody>
             {% for s in sessions %}
-            <tr>
+            <tr class="session-row-link" onclick="window.location='/session/{{ s.session_id }}'" style="cursor:pointer;">
                 <td style="white-space:nowrap">{{ s.time }}</td>
                 <td><code style="font-size:12px;">{{ s.slug }}</code></td>
                 <td style="text-align:right">{{ s.message_count }}</td>

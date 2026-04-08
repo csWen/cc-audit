@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Session — {{ meta_slug }}{% endblock %}
+
+{% block content %}
+<div class="session-header">
+    <div>
+        <a href="/projects/{{ meta_project_dir_name }}" class="back-link">&larr; Back to {{ meta_project_display_name }}</a>
+        <h2 style="margin-top:4px;">
+            <code style="font-size:18px;">{{ meta_slug }}</code>
+        </h2>
+        <div class="session-meta-row">
+            <span>{{ meta_first_active }}</span>
+            <span class="meta-sep">&middot;</span>
+            <span>{{ meta_message_count }} messages</span>
+            <span class="meta-sep">&middot;</span>
+            <span>{{ meta_total_tokens }} tokens</span>
+            <span class="meta-sep">&middot;</span>
+            <span>${{ meta_cost }}</span>
+        </div>
+    </div>
+</div>
+
+<div class="session-controls">
+    <label class="toggle-label">
+        <input type="checkbox" id="toggleTools" checked>
+        <span>Show tool calls</span>
+    </label>
+</div>
+
+<div class="conversation" id="conversation">
+    {% for m in messages %}
+    <div class="msg msg-{{ m.role }}">
+        <div class="msg-header">
+            {% if m.role == "user" %}
+                <span class="msg-role msg-role-user">User</span>
+            {% else %}
+                <span class="msg-role msg-role-assistant">Assistant</span>
+                {% if !m.model.is_empty() %}
+                    <span class="msg-model">{{ m.model }}</span>
+                {% endif %}
+            {% endif %}
+            <span class="msg-time">{{ m.timestamp }}</span>
+        </div>
+        <div class="msg-body">{{ m.blocks_html|safe }}</div>
+    </div>
+    {% endfor %}
+
+    {% if messages.is_empty() %}
+    <div style="text-align:center; color:#64748b; padding:60px;">
+        No messages found in this session.
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    var toggle = document.getElementById('toggleTools');
+    var conv = document.getElementById('conversation');
+
+    function applyToggle() {
+        if (toggle.checked) {
+            conv.classList.remove('hide-tools');
+        } else {
+            conv.classList.add('hide-tools');
+        }
+    }
+
+    toggle.addEventListener('change', applyToggle);
+    applyToggle();
+})();
+</script>
+{% endblock %}
