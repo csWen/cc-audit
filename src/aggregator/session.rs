@@ -10,7 +10,7 @@ use crate::parser::models::{ContentBlock, TranscriptEntry};
 
 /// A single message in the rendered conversation.
 pub struct ConversationMessage {
-    pub role: String,       // "user" | "assistant"
+    pub role: String, // "user" | "assistant"
     pub timestamp: String,
     pub model: String,
     pub blocks: Vec<DisplayBlock>,
@@ -56,7 +56,10 @@ pub struct SessionDetail {
 const MAX_TOOL_RESULT_LINES: usize = 200;
 
 /// Find the JSONL file for a given session_id across all projects.
-fn find_session_file(claude_dir: &Path, session_id: &str) -> Option<(std::path::PathBuf, String, String)> {
+fn find_session_file(
+    claude_dir: &Path,
+    session_id: &str,
+) -> Option<(std::path::PathBuf, String, String)> {
     let projects = discover_projects(claude_dir).ok()?;
     let filename = format!("{session_id}.jsonl");
 
@@ -99,15 +102,24 @@ fn tool_use_summary(name: &str, input: &Option<serde_json::Value>) -> String {
 
     match name {
         "Read" => {
-            let path = input.get("file_path").and_then(|v| v.as_str()).unwrap_or("?");
+            let path = input
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             format!("Read({path})")
         }
         "Write" => {
-            let path = input.get("file_path").and_then(|v| v.as_str()).unwrap_or("?");
+            let path = input
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             format!("Write({path})")
         }
         "Edit" => {
-            let path = input.get("file_path").and_then(|v| v.as_str()).unwrap_or("?");
+            let path = input
+                .get("file_path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             format!("Edit({path})")
         }
         "Grep" => {
@@ -128,7 +140,10 @@ fn tool_use_summary(name: &str, input: &Option<serde_json::Value>) -> String {
             format!("Bash({truncated})")
         }
         "Agent" => {
-            let desc = input.get("description").and_then(|v| v.as_str()).unwrap_or("?");
+            let desc = input
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             let agent_type = input.get("subagent_type").and_then(|v| v.as_str());
             match agent_type {
                 Some(t) => format!("Agent({t}: \"{desc}\")"),
@@ -265,7 +280,8 @@ pub fn load_session(claude_dir: &Path, session_id: &str) -> Result<Option<Sessio
     let mut message_count: usize = 0;
 
     // Build a map of tool_use_id -> tool_name for pairing results
-    let mut tool_name_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut tool_name_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
 
     // First pass: collect metadata and tool name map
     for entry in &entries {
@@ -286,7 +302,8 @@ pub fn load_session(claude_dir: &Path, session_id: &str) -> Result<Option<Sessio
             if a.message.stop_reason.is_some() {
                 if let Some(usage) = &a.message.usage {
                     let model = a.message.model.as_deref().unwrap_or("unknown");
-                    total_tokens += usage.input_tokens + usage.output_tokens
+                    total_tokens += usage.input_tokens
+                        + usage.output_tokens
                         + usage.cache_creation_input_tokens
                         + usage.cache_read_input_tokens;
                     total_cost += estimate_cost(
@@ -415,12 +432,7 @@ pub fn load_session(claude_dir: &Path, session_id: &str) -> Result<Option<Sessio
                     .and_then(|c| c.timestamp)
                     .map(|t| t.format("%H:%M").to_string())
                     .unwrap_or_default();
-                let model = a
-                    .message
-                    .model
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_string();
+                let model = a.message.model.as_deref().unwrap_or("").to_string();
 
                 let mut blocks = Vec::new();
 
@@ -451,7 +463,9 @@ pub fn load_session(claude_dir: &Path, session_id: &str) -> Result<Option<Sessio
                                     let summary = tool_use_summary(name, input);
                                     let input_json = input
                                         .as_ref()
-                                        .map(|v| serde_json::to_string_pretty(v).unwrap_or_default())
+                                        .map(|v| {
+                                            serde_json::to_string_pretty(v).unwrap_or_default()
+                                        })
                                         .unwrap_or_default();
                                     blocks.push(DisplayBlock::ToolUse {
                                         name: name.clone(),

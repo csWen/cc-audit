@@ -72,14 +72,8 @@ fn print_stats(stats: &GlobalStats) {
     println!("CC-Audit Stats ({})", stats.time_range);
     println!("─────────────────────────────────────────");
 
-    println!(
-        "Total sessions:  {}",
-        stats.total_sessions
-    );
-    println!(
-        "Total turns:     {}",
-        stats.total_turns
-    );
+    println!("Total sessions:  {}", stats.total_sessions);
+    println!("Total turns:     {}", stats.total_turns);
     println!(
         "Total tokens:    {} (input: {}, output: {}, cache_create: {}, cache_read: {})",
         fmt_tokens(stats.tokens.total()),
@@ -134,10 +128,7 @@ fn print_stats(stats: &GlobalStats) {
         let total_cost = stats.total_cost.max(0.01);
         for m in &stats.models {
             let pct = m.cost / total_cost * 100.0;
-            println!(
-                "  {:<25} {:>5.1}%   ${:.2}",
-                m.name, pct, m.cost
-            );
+            println!("  {:<25} {:>5.1}%   ${:.2}", m.name, pct, m.cost);
         }
     }
 }

@@ -16,7 +16,9 @@ pub enum TranscriptEntry {
     LastPrompt(LastPromptEntry),
     PrLink(PrLinkEntry),
     /// Catch-all for unknown/future message types
-    Other { type_name: String },
+    Other {
+        type_name: String,
+    },
 }
 
 /// Internal serde-tagged enum for known types only.

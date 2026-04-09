@@ -3,15 +3,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use askama::Template;
+use axum::Router;
 use axum::extract::Query;
-use axum::http::{header, StatusCode};
+use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use chrono::NaiveDate;
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
 
+use crate::aggregator::export;
 use crate::aggregator::session::{self, DisplayBlock, SessionDetail};
 use crate::aggregator::stats::{self, GlobalStats, ProjectDetailStats, TimeRange};
 
@@ -225,7 +226,10 @@ async fn overview_page(Query(q): Query<RangeQuery>) -> impl IntoResponse {
         active_nav: "overview",
         range: q.range,
     };
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
 }
 
 async fn overview_partial(
@@ -235,7 +239,10 @@ async fn overview_partial(
     let time_range = parse_time_range(&q.range);
     let stats = stats::aggregate(&state.claude_dir, time_range).unwrap_or_default();
     let tmpl = build_overview_partial(&q.range, &stats);
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
 }
 
 fn build_overview_partial(range: &str, stats: &GlobalStats) -> OverviewPartial {
@@ -282,7 +289,10 @@ async fn projects_page(Query(q): Query<RangeQuery>) -> impl IntoResponse {
         active_nav: "projects",
         range: q.range,
     };
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
 }
 
 async fn projects_partial(
@@ -314,7 +324,10 @@ async fn projects_partial(
         time_range_label: global_stats.time_range,
         projects,
     };
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
 }
 
 // ── Project detail handlers ──
@@ -342,7 +355,11 @@ async fn project_detail_page(
         display_name,
         range: q.range,
     };
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}"))).into_response()
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
+    .into_response()
 }
 
 async fn project_detail_partial(
@@ -356,21 +373,38 @@ async fn project_detail_partial(
         .flatten();
 
     let Some(detail) = detail else {
-        return Html("<div style='text-align:center; padding:60px; color:#64748b;'>Project not found.</div>".to_string()).into_response();
+        return Html(
+            "<div style='text-align:center; padding:60px; color:#64748b;'>Project not found.</div>"
+                .to_string(),
+        )
+        .into_response();
     };
 
     let tmpl = build_project_detail_partial(&q.range, &detail);
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}"))).into_response()
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
+    .into_response()
 }
 
 fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> ProjectDetailPartial {
-    let daily_labels: Vec<String> = detail.daily.iter().map(|d| d.date.format("%m/%d").to_string()).collect();
+    let daily_labels: Vec<String> = detail
+        .daily
+        .iter()
+        .map(|d| d.date.format("%m/%d").to_string())
+        .collect();
     let daily_input: Vec<u64> = detail.daily.iter().map(|d| d.tokens.input).collect();
     let daily_output: Vec<u64> = detail.daily.iter().map(|d| d.tokens.output).collect();
     let daily_cache_create: Vec<u64> = detail.daily.iter().map(|d| d.tokens.cache_create).collect();
     let daily_cache_read: Vec<u64> = detail.daily.iter().map(|d| d.tokens.cache_read).collect();
 
-    let tool_labels: Vec<String> = detail.tools.iter().take(15).map(|t| t.name.clone()).collect();
+    let tool_labels: Vec<String> = detail
+        .tools
+        .iter()
+        .take(15)
+        .map(|t| t.name.clone())
+        .collect();
     let tool_counts: Vec<usize> = detail.tools.iter().take(15).map(|t| t.count).collect();
 
     let sessions: Vec<SessionRow> = detail
@@ -385,7 +419,11 @@ fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> Pro
             slug: if s.slug.is_empty() {
                 // Show truncated session_id as fallback when slug is unavailable
                 let id = &s.session_id;
-                if id.len() > 8 { format!("{}…", &id[..8]) } else { id.clone() }
+                if id.len() > 8 {
+                    format!("{}…", &id[..8])
+                } else {
+                    id.clone()
+                }
             } else {
                 s.slug.clone()
             },
@@ -435,7 +473,11 @@ async fn session_detail_page_handler(
     };
 
     let tmpl = build_session_detail(&detail);
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}"))).into_response()
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
+    .into_response()
 }
 
 fn build_session_detail(detail: &SessionDetail) -> SessionDetailPage {
@@ -526,6 +568,65 @@ fn html_escape(s: &str) -> String {
 
 const MAX_TOOL_RESULT_LINES: usize = 200;
 
+// ── Session export handler ──
+
+#[derive(Deserialize)]
+struct ExportQuery {
+    #[serde(default = "default_export_format")]
+    format: String,
+    #[serde(default)]
+    tools: bool,
+}
+
+fn default_export_format() -> String {
+    "md".to_string()
+}
+
+async fn session_export_handler(
+    axum::extract::Path(path): axum::extract::Path<SessionDetailPath>,
+    Query(q): Query<ExportQuery>,
+    state: axum::extract::State<Arc<AppState>>,
+) -> Response {
+    let detail = session::load_session(&state.claude_dir, &path.session_id)
+        .ok()
+        .flatten();
+
+    let Some(detail) = detail else {
+        return (StatusCode::NOT_FOUND, "Session not found").into_response();
+    };
+
+    let is_html = q.format == "html";
+    let (content, content_type, ext) = if is_html {
+        (
+            export::render_html(&detail, q.tools),
+            "text/html; charset=utf-8",
+            "html",
+        )
+    } else {
+        (
+            export::render_markdown(&detail, q.tools),
+            "text/markdown; charset=utf-8",
+            "md",
+        )
+    };
+
+    let slug = &detail.meta.slug;
+    let filename = format!("{slug}.{ext}");
+
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, content_type.to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{filename}\""),
+            ),
+        ],
+        content,
+    )
+        .into_response()
+}
+
 // ── Tools page handlers ──
 
 async fn tools_page(Query(q): Query<RangeQuery>) -> impl IntoResponse {
@@ -533,7 +634,10 @@ async fn tools_page(Query(q): Query<RangeQuery>) -> impl IntoResponse {
         active_nav: "tools",
         range: q.range,
     };
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
 }
 
 async fn tools_partial(
@@ -543,7 +647,10 @@ async fn tools_partial(
     let time_range = parse_time_range(&q.range);
     let global_stats = stats::aggregate(&state.claude_dir, time_range).unwrap_or_default();
     let tmpl = build_tools_partial(&q.range, &global_stats);
-    Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
+    Html(
+        tmpl.render()
+            .unwrap_or_else(|e| format!("Template error: {e}")),
+    )
 }
 
 fn build_tools_partial(range: &str, stats: &GlobalStats) -> ToolsPartial {
@@ -680,8 +787,15 @@ pub async fn serve(port: u16) -> anyhow::Result<()> {
         .route("/projects", get(projects_page))
         .route("/api/projects", get(projects_partial))
         .route("/projects/{dir_name}", get(project_detail_page))
-        .route("/api/project-detail/{dir_name}", get(project_detail_partial))
+        .route(
+            "/api/project-detail/{dir_name}",
+            get(project_detail_partial),
+        )
         .route("/session/{session_id}", get(session_detail_page_handler))
+        .route(
+            "/api/session/{session_id}/export",
+            get(session_export_handler),
+        )
         .route("/tools", get(tools_page))
         .route("/api/tools", get(tools_partial))
         .route("/static/{*path}", get(static_file))

@@ -522,6 +522,67 @@ body {
     overflow-y: auto;
 }
 
+/* Export dropdown */
+.session-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.export-dropdown {
+    position: relative;
+    margin-left: auto;
+}
+
+.export-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.export-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.export-menu {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    min-width: 200px;
+    z-index: 50;
+    overflow: hidden;
+}
+
+.export-menu.show {
+    display: block;
+}
+
+.export-menu a {
+    display: block;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: background 0.1s;
+}
+
+.export-menu a:hover {
+    background: var(--main-bg);
+    color: var(--accent);
+}
+
 /* Toggle tool visibility */
 .hide-tools .tool-call,
 .hide-tools .tool-result {

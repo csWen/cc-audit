@@ -14,16 +14,16 @@ pub fn pricing_for_model(model: &str) -> ModelPricing {
         ModelPricing {
             input_per_mtok: 5.0,
             output_per_mtok: 25.0,
-            cache_create_per_mtok: 6.25,   // 1.25x input
-            cache_read_per_mtok: 0.50,     // 0.1x input
+            cache_create_per_mtok: 6.25, // 1.25x input
+            cache_read_per_mtok: 0.50,   // 0.1x input
         }
     } else if model.contains("opus") {
         // Opus 4.0 / 4.1 pricing
         ModelPricing {
             input_per_mtok: 15.0,
             output_per_mtok: 75.0,
-            cache_create_per_mtok: 18.75,  // 1.25x input
-            cache_read_per_mtok: 1.5,      // 0.1x input
+            cache_create_per_mtok: 18.75, // 1.25x input
+            cache_read_per_mtok: 1.5,     // 0.1x input
         }
     } else if model.contains("haiku") {
         ModelPricing {

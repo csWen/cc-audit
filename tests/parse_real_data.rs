@@ -104,9 +104,7 @@ fn test_extract_usage_and_tools() {
 
                     // Tool use extraction
                     for block in &a.message.content {
-                        if let cc_audit::parser::models::ContentBlock::ToolUse {
-                            name, ..
-                        } = block
+                        if let cc_audit::parser::models::ContentBlock::ToolUse { name, .. } = block
                         {
                             *tool_counts.entry(name.clone()).or_default() += 1;
                         }

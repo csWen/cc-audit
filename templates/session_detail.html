@@ -26,6 +26,16 @@
         <input type="checkbox" id="toggleTools" checked>
         <span>Show tool calls</span>
     </label>
+
+    <div class="export-dropdown">
+        <button class="export-btn" id="exportBtn">Export &#9662;</button>
+        <div class="export-menu" id="exportMenu">
+            <a href="/api/session/{{ meta_session_id }}/export?format=md">Markdown</a>
+            <a href="/api/session/{{ meta_session_id }}/export?format=md&tools=true">Markdown (with tools)</a>
+            <a href="/api/session/{{ meta_session_id }}/export?format=html">HTML</a>
+            <a href="/api/session/{{ meta_session_id }}/export?format=html&tools=true">HTML (with tools)</a>
+        </div>
+    </div>
 </div>
 
 <div class="conversation" id="conversation">
@@ -68,6 +78,19 @@
 
     toggle.addEventListener('change', applyToggle);
     applyToggle();
+
+    // Export dropdown
+    var btn = document.getElementById('exportBtn');
+    var menu = document.getElementById('exportMenu');
+
+    btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        menu.classList.toggle('show');
+    });
+
+    document.addEventListener('click', function() {
+        menu.classList.remove('show');
+    });
 })();
 </script>
 {% endblock %}

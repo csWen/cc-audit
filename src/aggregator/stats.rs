@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::Result;
 use chrono::{DateTime, NaiveDate, Utc};
 
-use crate::parser::discovery::{discover_projects, ProjectDir};
+use crate::parser::discovery::{ProjectDir, discover_projects};
 use crate::parser::jsonl::parse_jsonl;
 use crate::parser::models::{ContentBlock, TranscriptEntry, UserEntry};
 
@@ -194,11 +194,7 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                     proj_stats.message_count += 1;
                     stats.total_turns += 1;
 
-                    let model = a
-                        .message
-                        .model
-                        .as_deref()
-                        .unwrap_or("unknown");
+                    let model = a.message.model.as_deref().unwrap_or("unknown");
 
                     // Usage aggregation
                     if let Some(usage) = &a.message.usage {
@@ -266,10 +262,15 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
 
                             if name == "Skill" {
                                 if let Some(input) = input {
-                                    if let Some(skill_name) = input.get("skill").and_then(|v| v.as_str()) {
-                                        let s = skill_map.entry(skill_name.to_string()).or_default();
+                                    if let Some(skill_name) =
+                                        input.get("skill").and_then(|v| v.as_str())
+                                    {
+                                        let s =
+                                            skill_map.entry(skill_name.to_string()).or_default();
                                         s.0 += 1;
-                                        if entry_ts.is_some() && s.1.is_none_or(|prev| entry_ts.unwrap() > prev) {
+                                        if entry_ts.is_some()
+                                            && s.1.is_none_or(|prev| entry_ts.unwrap() > prev)
+                                        {
                                             s.1 = entry_ts;
                                         }
                                     }
@@ -284,7 +285,9 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                                         .unwrap_or("general-purpose");
                                     let a = agent_map.entry(agent_type.to_string()).or_default();
                                     a.0 += 1;
-                                    if entry_ts.is_some() && a.1.is_none_or(|prev| entry_ts.unwrap() > prev) {
+                                    if entry_ts.is_some()
+                                        && a.1.is_none_or(|prev| entry_ts.unwrap() > prev)
+                                    {
                                         a.1 = entry_ts;
                                     }
                                 }
@@ -317,7 +320,9 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
             cost,
         })
         .collect();
-    stats.models.sort_by(|a, b| b.cost.partial_cmp(&a.cost).unwrap());
+    stats
+        .models
+        .sort_by(|a, b| b.cost.partial_cmp(&a.cost).unwrap());
 
     stats.tools = tool_map
         .into_iter()
@@ -438,14 +443,14 @@ pub fn aggregate_project(
             // Track session and extract slug
             if let Some(common) = entry.common() {
                 if let Some(sid) = &common.session_id {
-                    let sess = session_map.entry(sid.clone()).or_insert_with(|| {
-                        SessionSummary {
+                    let sess = session_map
+                        .entry(sid.clone())
+                        .or_insert_with(|| SessionSummary {
                             session_id: sid.clone(),
                             slug: common.slug.clone().unwrap_or_default(),
                             first_active: common.timestamp,
                             ..Default::default()
-                        }
-                    });
+                        });
                     // Update slug if we didn't have one
                     if sess.slug.is_empty() {
                         if let Some(s) = &common.slug {
