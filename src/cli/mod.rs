@@ -5,7 +5,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use crate::aggregator::stats::{self, GlobalStats, TimeRange, TokenBreakdown};
 
 #[derive(Parser)]
-#[command(name = "cc-audit", about = "Claude Code usage insight tool")]
+#[command(name = "cc-audit", about = "Claude Code usage insight tool", version)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,
