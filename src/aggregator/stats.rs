@@ -156,6 +156,8 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
         };
 
         let mut sessions_seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut agent_msg_seen: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
 
         for jsonl_file in &project.jsonl_files {
             let parse_result = parse_jsonl(jsonl_file)?;
@@ -295,6 +297,73 @@ pub fn aggregate(claude_dir: &Path, time_range: TimeRange) -> Result<GlobalStats
                         }
                     }
                 }
+
+                // Subagent messages: extract model/usage from agent_progress entries
+                if let TranscriptEntry::Progress(p) = entry {
+                    let is_agent = p.data.as_ref().and_then(|d| d.data_type.as_deref())
+                        == Some("agent_progress");
+
+                    if is_agent {
+                        if let Some(inner) = p
+                            .data
+                            .as_ref()
+                            .and_then(|d| d.message.as_ref())
+                            .and_then(|m| m.message.as_ref())
+                        {
+                            let uuid = p
+                                .data
+                                .as_ref()
+                                .and_then(|d| d.message.as_ref())
+                                .and_then(|m| m.uuid.clone())
+                                .unwrap_or_default();
+
+                            if !uuid.is_empty() && !agent_msg_seen.insert(uuid) {
+                                // Already counted this subagent message
+                            } else if let Some(usage) = &inner.usage {
+                                let model = inner.model.as_deref().unwrap_or("unknown");
+                                let cost = estimate_cost(
+                                    model,
+                                    usage.input_tokens,
+                                    usage.output_tokens,
+                                    usage.cache_creation_input_tokens,
+                                    usage.cache_read_input_tokens,
+                                );
+
+                                proj_stats.tokens.input += usage.input_tokens;
+                                proj_stats.tokens.output += usage.output_tokens;
+                                proj_stats.tokens.cache_create += usage.cache_creation_input_tokens;
+                                proj_stats.tokens.cache_read += usage.cache_read_input_tokens;
+                                proj_stats.cost += cost;
+
+                                stats.tokens.input += usage.input_tokens;
+                                stats.tokens.output += usage.output_tokens;
+                                stats.tokens.cache_create += usage.cache_creation_input_tokens;
+                                stats.tokens.cache_read += usage.cache_read_input_tokens;
+                                stats.total_cost += cost;
+
+                                let m = model_map.entry(model.to_string()).or_default();
+                                m.0.input += usage.input_tokens;
+                                m.0.output += usage.output_tokens;
+                                m.0.cache_create += usage.cache_creation_input_tokens;
+                                m.0.cache_read += usage.cache_read_input_tokens;
+                                m.1 += 1;
+                                m.2 += cost;
+
+                                if let Some(common) = entry.common() {
+                                    if let Some(ts) = common.timestamp {
+                                        let date = ts.date_naive();
+                                        let d = daily_map.entry(date).or_default();
+                                        d.0.input += usage.input_tokens;
+                                        d.0.output += usage.output_tokens;
+                                        d.0.cache_create += usage.cache_creation_input_tokens;
+                                        d.0.cache_read += usage.cache_read_input_tokens;
+                                        d.1 += cost;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -424,6 +493,7 @@ pub fn aggregate_project(
     let mut tool_map: HashMap<String, usize> = HashMap::new();
     let mut daily_map: HashMap<NaiveDate, (TokenBreakdown, f64)> = HashMap::new();
     let mut session_map: HashMap<String, SessionSummary> = HashMap::new();
+    let mut agent_msg_seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for jsonl_file in &project.jsonl_files {
         let parse_result = parse_jsonl(jsonl_file)?;
@@ -534,6 +604,70 @@ pub fn aggregate_project(
                 for block in &a.message.content {
                     if let ContentBlock::ToolUse { name, .. } = block {
                         *tool_map.entry(name.clone()).or_default() += 1;
+                    }
+                }
+            }
+
+            // Subagent messages
+            if let TranscriptEntry::Progress(p) = entry {
+                let is_agent =
+                    p.data.as_ref().and_then(|d| d.data_type.as_deref()) == Some("agent_progress");
+
+                if is_agent {
+                    if let Some(inner) = p
+                        .data
+                        .as_ref()
+                        .and_then(|d| d.message.as_ref())
+                        .and_then(|m| m.message.as_ref())
+                    {
+                        let uuid = p
+                            .data
+                            .as_ref()
+                            .and_then(|d| d.message.as_ref())
+                            .and_then(|m| m.uuid.clone())
+                            .unwrap_or_default();
+
+                        if !uuid.is_empty() && !agent_msg_seen.insert(uuid) {
+                            // Already counted
+                        } else if let Some(usage) = &inner.usage {
+                            let model = inner.model.as_deref().unwrap_or("unknown");
+                            let cost = estimate_cost(
+                                model,
+                                usage.input_tokens,
+                                usage.output_tokens,
+                                usage.cache_creation_input_tokens,
+                                usage.cache_read_input_tokens,
+                            );
+
+                            detail.tokens.input += usage.input_tokens;
+                            detail.tokens.output += usage.output_tokens;
+                            detail.tokens.cache_create += usage.cache_creation_input_tokens;
+                            detail.tokens.cache_read += usage.cache_read_input_tokens;
+                            detail.cost += cost;
+
+                            if let Some(common) = entry.common() {
+                                if let Some(sid) = &common.session_id {
+                                    if let Some(sess) = session_map.get_mut(sid) {
+                                        sess.tokens.input += usage.input_tokens;
+                                        sess.tokens.output += usage.output_tokens;
+                                        sess.tokens.cache_create +=
+                                            usage.cache_creation_input_tokens;
+                                        sess.tokens.cache_read += usage.cache_read_input_tokens;
+                                        sess.cost += cost;
+                                    }
+                                }
+
+                                if let Some(ts) = common.timestamp {
+                                    let date = ts.date_naive();
+                                    let d = daily_map.entry(date).or_default();
+                                    d.0.input += usage.input_tokens;
+                                    d.0.output += usage.output_tokens;
+                                    d.0.cache_create += usage.cache_creation_input_tokens;
+                                    d.0.cache_read += usage.cache_read_input_tokens;
+                                    d.1 += cost;
+                                }
+                            }
+                        }
                     }
                 }
             }

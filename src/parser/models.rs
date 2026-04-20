@@ -213,10 +213,31 @@ pub struct FileHistorySnapshotEntry {
 
 #[derive(Debug, Deserialize)]
 pub struct ProgressEntry {
+    pub data: Option<ProgressData>,
     #[serde(flatten)]
     pub common: CommonFields,
-    #[serde(flatten)]
-    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProgressData {
+    #[serde(rename = "type")]
+    pub data_type: Option<String>,
+    pub message: Option<ProgressMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProgressMessage {
+    pub uuid: Option<String>,
+    pub message: Option<AgentAssistantMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AgentAssistantMessage {
+    pub model: Option<String>,
+    pub stop_reason: Option<String>,
+    pub usage: Option<Usage>,
+    #[serde(default)]
+    pub content: Vec<ContentBlock>,
 }
 
 // ── PR Link ──
