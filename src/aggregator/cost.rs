@@ -73,20 +73,54 @@ const HAIKU_3: ModelPricing = ModelPricing {
     cache_read_per_mtok: 0.03,
 };
 
+const SONNET_5: ModelPricing = ModelPricing {
+    input_per_mtok: 2.0,
+    output_per_mtok: 10.0,
+    cache_create_per_mtok: 2.5,
+    cache_read_per_mtok: 0.20,
+};
+
+/// Fable 5 / Fable 5.1's shared base rate card. Fable 5.1 overrides cache
+/// reads to $0.25/MTok (see [`FABLE_5_1`]) instead of the usual 0.1x-input
+/// formula; Fable 5 itself still follows that formula.
+const FABLE: ModelPricing = ModelPricing {
+    input_per_mtok: 10.0,
+    output_per_mtok: 50.0,
+    cache_create_per_mtok: 12.5,
+    cache_read_per_mtok: 1.0,
+};
+
+/// Fable 5.1 / Mythos 5.1: same input/output/cache-write rate as [`FABLE`],
+/// but cache reads are priced at a flat $0.25/MTok rather than 0.1x input.
+const FABLE_5_1: ModelPricing = ModelPricing {
+    input_per_mtok: 10.0,
+    output_per_mtok: 50.0,
+    cache_create_per_mtok: 12.5,
+    cache_read_per_mtok: 0.25,
+};
+
 /// Lookup table: (substring pattern, pricing tier). Checked in order —
 /// first match wins. List more specific patterns (e.g. `"opus-4-7"`) before
 /// broader ones (e.g. `"opus-4"`) so newer models don't fall through to a
 /// legacy tier.
 static PRICING_TABLE: &[(&str, ModelPricing)] = &[
     // Opus 4.5+ (current pricing tier, 3x cheaper than 4.0/4.1)
+    ("opus-4-8", OPUS_LATEST),
     ("opus-4-7", OPUS_LATEST),
     ("opus-4-6", OPUS_LATEST),
     ("opus-4-5", OPUS_LATEST),
+    ("opus-5", OPUS_LATEST),
     // Opus legacy (4.0, 4.1, 3.0 — all share the $15/$75 rate card)
     ("opus-4-1", OPUS_LEGACY),
     ("opus-4", OPUS_LEGACY),
     ("opus-3", OPUS_LEGACY),
-    // Sonnet — all versions (3.5/3.7/4/4.5/4.6) share the same rate card
+    // Fable 5.1 / Mythos 5.1 — check before the broader "fable-5" pattern
+    ("fable-5-1", FABLE_5_1),
+    ("mythos-5-1", FABLE_5_1),
+    ("fable-5", FABLE),
+    // Sonnet 5 (new cheaper tier vs 4.6 and earlier)
+    ("sonnet-5", SONNET_5),
+    // Sonnet — all other versions (3.5/3.7/4/4.5/4.6) share the same rate card
     ("sonnet", SONNET),
     // Haiku — list newer (more expensive) tiers first
     ("haiku-4", HAIKU_4_PLUS),
@@ -187,6 +221,57 @@ mod tests {
     fn haiku_35_uses_legacy_tier() {
         let p = pricing_for_model("claude-3-5-haiku-20241022").unwrap();
         assert_eq!(p.input_per_mtok, 0.80);
+    }
+
+    #[test]
+    fn opus_5_uses_latest_tier() {
+        let p = pricing_for_model("claude-opus-5").unwrap();
+        assert_eq!(p.input_per_mtok, 5.0);
+        assert_eq!(p.output_per_mtok, 25.0);
+    }
+
+    #[test]
+    fn opus_48_uses_latest_tier_not_legacy() {
+        let p = pricing_for_model("claude-opus-4-8").unwrap();
+        assert_eq!(p.input_per_mtok, 5.0);
+        assert_eq!(p.output_per_mtok, 25.0);
+    }
+
+    #[test]
+    fn sonnet_5_uses_new_cheaper_tier() {
+        let p = pricing_for_model("claude-sonnet-5").unwrap();
+        assert_eq!(p.input_per_mtok, 2.0);
+        assert_eq!(p.output_per_mtok, 10.0);
+        // Sonnet 4.6 and earlier stay on the older $3/$15 rate card.
+        let legacy = pricing_for_model("claude-sonnet-4-6").unwrap();
+        assert_eq!(legacy.input_per_mtok, 3.0);
+    }
+
+    #[test]
+    fn fable_5_1_has_flat_cache_read_rate() {
+        let p = pricing_for_model("claude-fable-5-1").unwrap();
+        assert_eq!(p.input_per_mtok, 10.0);
+        assert_eq!(p.output_per_mtok, 50.0);
+        assert_eq!(p.cache_read_per_mtok, 0.25);
+    }
+
+    #[test]
+    fn mythos_5_1_matches_fable_5_1_pricing() {
+        let p = pricing_for_model("claude-mythos-5-1").unwrap();
+        assert_eq!(p.cache_read_per_mtok, 0.25);
+    }
+
+    #[test]
+    fn fable_5_uses_standard_cache_read_formula() {
+        let p = pricing_for_model("claude-fable-5").unwrap();
+        assert_eq!(p.input_per_mtok, 10.0);
+        assert_eq!(p.cache_read_per_mtok, 1.0);
+    }
+
+    #[test]
+    fn haiku_45_still_matches_current_tier() {
+        let p = pricing_for_model("claude-haiku-4-5").unwrap();
+        assert_eq!(p.input_per_mtok, 1.0);
     }
 
     #[test]
