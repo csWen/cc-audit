@@ -1,8 +1,10 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Local, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
 
-use crate::aggregator::stats::{self, GlobalStats, TimeRange, TokenBreakdown};
+use crate::aggregator::stats::{self, GlobalStats, SessionSummary, TimeRange};
+use crate::parser::discovery::find_project_for_path;
 
 #[derive(Parser)]
 #[command(name = "cc-audit", about = "Claude Code usage insight tool", version)]
@@ -25,6 +27,28 @@ pub enum Command {
         #[arg(short, long, default_value = "3000")]
         port: u16,
     },
+    /// List recent sessions of a project, newest first (handy for `claude --resume <id>`)
+    Sessions {
+        /// Project directory; any subdirectory of the project also works
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Maximum number of sessions to show
+        #[arg(short = 'n', long, default_value = "10")]
+        limit: usize,
+        /// How much detail to print per session
+        #[arg(short, long, default_value = "brief")]
+        format: SessionFormat,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum SessionFormat {
+    /// Session ids only, one per line (pipe-friendly)
+    Id,
+    /// One line per session: id, last active time, title
+    Brief,
+    /// Multi-line block per session with activity window, usage, and first prompt
+    Full,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -52,20 +76,92 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Stats { range } => run_stats(range.into()),
         Command::Serve { port } => crate::web::serve(port).await,
+        Command::Sessions {
+            path,
+            limit,
+            format,
+        } => run_sessions(&path, limit, format),
     }
 }
 
-fn run_stats(time_range: TimeRange) -> anyhow::Result<()> {
+fn claude_dir() -> anyhow::Result<PathBuf> {
     let home = std::env::var("HOME")?;
     let claude_dir = PathBuf::from(&home).join(".claude");
-
     if !claude_dir.is_dir() {
         anyhow::bail!("~/.claude directory not found");
     }
+    Ok(claude_dir)
+}
 
-    let stats = stats::aggregate(&claude_dir, time_range)?;
+fn run_stats(time_range: TimeRange) -> anyhow::Result<()> {
+    let stats = stats::aggregate(&claude_dir()?, time_range)?;
     print_stats(&stats);
     Ok(())
+}
+
+fn run_sessions(path: &Path, limit: usize, format: SessionFormat) -> anyhow::Result<()> {
+    let Some(project) = find_project_for_path(&claude_dir()?, path)? else {
+        anyhow::bail!(
+            "no Claude Code project found for {}",
+            path.canonicalize()
+                .unwrap_or_else(|_| path.to_path_buf())
+                .display()
+        );
+    };
+
+    let mut sessions = stats::aggregate_project_dir(&project, TimeRange::All)?.sessions;
+    sessions.sort_by(|a, b| b.last_active.cmp(&a.last_active));
+    sessions.truncate(limit);
+
+    if !matches!(format, SessionFormat::Id) {
+        println!(
+            "Sessions for {} ({}) — {} most recent",
+            project.display_name,
+            project.project_path,
+            sessions.len()
+        );
+        println!();
+    }
+
+    for sess in &sessions {
+        match format {
+            SessionFormat::Id => println!("{}", sess.session_id),
+            SessionFormat::Brief => println!(
+                "{}  {}  {}",
+                sess.session_id,
+                fmt_local_time(sess.last_active),
+                sess.display_title()
+            ),
+            SessionFormat::Full => print_session_full(sess),
+        }
+    }
+    Ok(())
+}
+
+fn print_session_full(sess: &SessionSummary) {
+    println!("{}", sess.session_id);
+    println!("  Title:     {}", sess.display_title());
+    println!(
+        "  Active:    {} → {}",
+        fmt_local_time(sess.first_active),
+        fmt_local_time(sess.last_active)
+    );
+    println!(
+        "  Usage:     {} messages, {} tokens, ${:.2}",
+        sess.message_count,
+        fmt_tokens(sess.tokens.total()),
+        sess.cost
+    );
+    if !sess.first_prompt.is_empty() {
+        println!("  Prompt:    {}", sess.first_prompt.replace('\n', " "));
+    }
+    println!("  Resume:    claude --resume {}", sess.session_id);
+    println!();
+}
+
+fn fmt_local_time(ts: Option<DateTime<Utc>>) -> String {
+    ts.map(|t| t.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string())
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 fn print_stats(stats: &GlobalStats) {

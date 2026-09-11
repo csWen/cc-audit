@@ -56,7 +56,8 @@
         <thead>
             <tr>
                 <th>Time</th>
-                <th>Slug</th>
+                <th>Session</th>
+                <th>Title</th>
                 <th style="text-align:right">Messages</th>
                 <th style="text-align:right">Tokens</th>
                 <th style="text-align:right">Cost</th>
@@ -67,7 +68,8 @@
             {% for s in sessions %}
             <tr class="session-row-link" onclick="window.location='/session/{{ s.session_id }}'" style="cursor:pointer;">
                 <td style="white-space:nowrap">{{ s.time }}</td>
-                <td><code style="font-size:12px;">{{ s.slug }}</code></td>
+                <td><code style="font-size:12px;" title="{{ s.session_id }}">{{ s.short_id }}</code></td>
+                <td class="prompt-preview" title="{{ s.title }}">{{ s.title }}</td>
                 <td style="text-align:right">{{ s.message_count }}</td>
                 <td style="text-align:right">{{ s.total_tokens }}</td>
                 <td style="text-align:right">${{ s.cost }}</td>
@@ -76,7 +78,7 @@
             {% endfor %}
             {% if sessions.is_empty() %}
             <tr>
-                <td colspan="6" style="text-align:center; color:#64748b; padding:40px;">No sessions found.</td>
+                <td colspan="7" style="text-align:center; color:#64748b; padding:40px;">No sessions found.</td>
             </tr>
             {% endif %}
         </tbody>

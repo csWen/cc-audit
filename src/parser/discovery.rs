@@ -65,6 +65,37 @@ pub fn discover_projects(claude_dir: &Path) -> Result<Vec<ProjectDir>> {
     Ok(projects)
 }
 
+/// Find the project that a Claude Code session launched from `path` would belong to.
+///
+/// Walks from `path` up through its ancestors so the lookup also works from a
+/// subdirectory of the project. Matches on the resolved project path first, then
+/// on the encoded directory name (for projects whose path could not be resolved).
+pub fn find_project_for_path(claude_dir: &Path, path: &Path) -> Result<Option<ProjectDir>> {
+    let projects = discover_projects(claude_dir)?;
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+    for candidate in path.ancestors() {
+        let candidate = candidate.to_string_lossy();
+        let dir_name = encode_project_dir_name(&candidate);
+        let found = projects
+            .iter()
+            .find(|p| p.project_path == candidate)
+            .or_else(|| projects.iter().find(|p| p.dir_name == dir_name));
+        if let Some(project) = found {
+            return Ok(Some(project.clone()));
+        }
+    }
+    Ok(None)
+}
+
+/// Encode a filesystem path the way Claude Code names its project directories:
+/// every non-alphanumeric character becomes `-`.
+pub fn encode_project_dir_name(path: &str) -> String {
+    path.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
 /// Try to resolve the original project path using multiple strategies:
 /// 1. sessions-index.json's projectPath field
 /// 2. "cwd" field from the first assistant message in a JSONL file
@@ -143,6 +174,52 @@ mod tests {
             make_display_name("/Users/alice/work/org/service"),
             "org/service"
         );
+    }
+
+    #[test]
+    fn test_encode_project_dir_name() {
+        assert_eq!(
+            encode_project_dir_name("/Users/alice/project/my-app"),
+            "-Users-alice-project-my-app"
+        );
+        assert_eq!(
+            encode_project_dir_name("/Users/alice/.tda/repos/lex"),
+            "-Users-alice--tda-repos-lex"
+        );
+    }
+
+    #[test]
+    fn test_find_project_for_path_walks_ancestors() {
+        let root = std::env::temp_dir().join(format!("cc-audit-test-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        // Canonicalize so the fixture matches what the lookup resolves (e.g. /var → /private/var)
+        let root = std::fs::canonicalize(&root).unwrap();
+        let project_root = root.join("work").join("my-app");
+        let nested = project_root.join("src").join("deep");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let claude_dir = root.join("claude");
+        let dir_name = encode_project_dir_name(&project_root.to_string_lossy());
+        let project_dir = claude_dir.join("projects").join(&dir_name);
+        std::fs::create_dir_all(&project_dir).unwrap();
+        std::fs::write(
+            project_dir.join("s1.jsonl"),
+            format!(
+                "{{\"type\":\"user\",\"cwd\":\"{}\",\"message\":{{\"content\":\"hi\"}}}}\n",
+                project_root.display()
+            ),
+        )
+        .unwrap();
+
+        let found = find_project_for_path(&claude_dir, &nested).unwrap();
+        assert_eq!(found.map(|p| p.dir_name), Some(dir_name));
+        assert!(
+            find_project_for_path(&claude_dir, &root.join("elsewhere"))
+                .unwrap()
+                .is_none()
+        );
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

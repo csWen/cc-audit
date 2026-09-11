@@ -15,6 +15,9 @@ cargo build --release
 # Run CLI stats (default range: 7d)
 cargo run -- stats --range 30d    # options: today, 7d, 30d, all
 
+# List recent sessions of a project (default: current directory, 10 newest)
+cargo run -- sessions [PATH] -n 5 --format brief    # formats: id, brief, full
+
 # Start web dashboard (default port: 3000)
 cargo run -- serve --port 3000
 
@@ -43,7 +46,7 @@ cargo clippy
 - `src/parser/` — JSONL parsing layer: `discovery.rs` finds projects, `jsonl.rs` parses lines, `models.rs` defines the `TranscriptEntry` enum, `session_index.rs` reads sessions-index.json
 - `src/aggregator/` — Data computation: `stats.rs` (aggregation + GlobalStats/ProjectDetailStats), `cost.rs` (model-specific pricing), `session.rs` (conversation replay with markdown rendering)
 - `src/web/mod.rs` — All axum routes and askama template structs
-- `src/cli/mod.rs` — CLI subcommands (stats, serve)
+- `src/cli/mod.rs` — CLI subcommands (stats, serve, sessions)
 - `templates/` — Askama HTML templates using `{% extends "base.html" %}` pattern; `*_partial.html` variants for HTMX partial updates
 - `static/` — Embedded frontend assets (htmx.min.js, chart.umd.min.js, style.css)
 
@@ -51,6 +54,8 @@ cargo clippy
 - Only assistant messages with `stop_reason` set are counted (filters out intermediate streaming chunks)
 - Sessions are deduplicated via HashSet on session_id
 - Project path resolution: tries sessions-index.json `projectPath` first, then `cwd` from first assistant message, then decodes from directory name
+- Reverse lookup (filesystem path → project) in `discovery.rs` walks up ancestors and matches on resolved `project_path`, falling back to the encoded directory name (non-alphanumeric chars → `-`)
+- Session titles come from `ai-title` entries; `SessionSummary::display_title()` falls back to slug, then first prompt, then a short id
 - Chart.js canvases must be destroyed and recreated on HTMX partial swaps (see `freshCanvas()` in base.html)
 - `TranscriptEntry::Other` captures unknown message types for forward compatibility
 - Tool/skill/agent extraction happens from `ContentBlock::ToolUse` entries in assistant messages

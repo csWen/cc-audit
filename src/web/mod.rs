@@ -92,8 +92,9 @@ struct ProjectDetailPage {
 
 struct SessionRow {
     session_id: String,
+    short_id: String,
     time: String,
-    slug: String,
+    title: String,
     message_count: usize,
     total_tokens: String,
     cost: String,
@@ -412,21 +413,12 @@ fn build_project_detail_partial(range: &str, detail: &ProjectDetailStats) -> Pro
         .iter()
         .map(|s| SessionRow {
             session_id: s.session_id.clone(),
+            short_id: s.short_id(),
             time: s
                 .first_active
                 .map(|t| t.format("%Y-%m-%d %H:%M").to_string())
                 .unwrap_or_default(),
-            slug: if s.slug.is_empty() {
-                // Show truncated session_id as fallback when slug is unavailable
-                let id = &s.session_id;
-                if id.len() > 8 {
-                    format!("{}…", &id[..8])
-                } else {
-                    id.clone()
-                }
-            } else {
-                s.slug.clone()
-            },
+            title: s.display_title(),
             message_count: s.message_count,
             total_tokens: fmt_tokens(s.tokens.total()),
             cost: format!("{:.2}", s.cost),
